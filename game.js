@@ -28,22 +28,27 @@ const scene = new THREE.Scene();
 
 const loader = new GLTFLoader();
 
+
 // add lights to the scene
 
 const color = 0xFFFFFF;
-const intensity = 6;
+const intensity = 10;
 const light2 = new THREE.DirectionalLight(color, intensity);
-light2.position.set(0, 10, 0);
-light2.target.position.set(-5, 0, 0);
+light2.position.set(80, 90, -15);
+light2.target.position.set(0, 0, -20);
+light2.castShadow = false;
+
 scene.add(light2);
 scene.add(light2.target);
+
+
+//const helper = new THREE.CameraHelper(light2.shadow.camera);
+
 
 const light = new THREE.AmbientLight(0x404040, 4);
 scene.add( light );
 
-const spotLight = new THREE.SpotLight(0xffffff, 3, 100, 0.2, 0.5);
-spotLight.position.set(0,25,0);
-scene.add(spotLight);
+
 
 // add camera
 
@@ -70,6 +75,8 @@ const renderer = new THREE.WebGLRenderer(
   alpha: true}
 );
 
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 
 renderer.setClearColor(0xffffff, 0);
@@ -101,6 +108,8 @@ loader.load( `/Assets/placeholder_models/temporary grid.glb`, function ( gltf ) 
 
 loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
   floor = gltf.scene;
+  floor.children[0].receiveShadow = true;
+  console.log(floor);
   scene.add(floor);
 
 }, undefined, function ( error ) {
@@ -146,6 +155,8 @@ const clock = new THREE.Clock();
 
 // set animation loop
 
+
+
 function animate() {
   
 
@@ -167,7 +178,7 @@ frames++;
   }
 }
   
-  movementAttackController();
+movementAttackController();
 
   renderer.render(scene, camera);
   controls.update();
@@ -176,6 +187,8 @@ frames++;
 }
 
 renderer.setAnimationLoop( animate );
+
+
 
 
 // create an array that stores all unit objects currently active in the round
@@ -206,7 +219,7 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   airborne: "no",
   canAttack: "both",
   _status: "alive",
-  set status(val) {
+ set status(val) {
     this._status = val;
   },
   get status() {return this._status;},
@@ -228,16 +241,52 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
   nearestEnemy: [0, 0],
+  animationActionStash: {
+    attack: null,
+    movement: null,
+    death: null
+  },
+  playAnimation (animation) {
+      this.animationActionStash.attack.reset();
+
+      if (animation === 'death') {
+        this.animationActionStash.attack.stop();
+        this.animationActionStash.movement.stop();
+      this.animationActionStash.death.setLoop(THREE.LoopOnce, 1); 
+      this.animationActionStash.death.clampWhenFinished = true;
+      this.animationActionStash.death.play();
+    } else if (animation === 'attack') {
+        
+      if (this.animationActionStash.movement.isRunning()) {
+        this.animationActionStash.movement.stop();
+        this.animationActionStash.movement.reset();
+    }
+      this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
+      this.animationActionStash.attack.clampWhenFinished = true;
+      this.animationActionStash.attack.play();      
+    } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning() && !this.animationActionStash.attack.isRunning()) {
+      this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
+      this.animationActionStash.movement.play();   
+    } if (animation === 'movement' && this.animationActionStash.movement.isRunning()) {
+      
+    }
+},
+
   attackAction () {
   if (this.target && this.target.health > 0) {
+    
     this.target.health = this.target.health-(this.damage-this.target.armour);
     
+    if (!this.animationActionStash.attack.isRunning()) {
+    this.playAnimation('attack');
+    }
+
     if (this.target.health <= 0) {
       this.target.death();
       this.target = null;
       if (this._attackInterval) {
       clearInterval(this._attackInterval); // Stop attacking after death
-      }
+      } 
     }
   }
 },
@@ -246,10 +295,10 @@ death () {
   if (this.mesh && this.mesh.children[0] && this.mesh.children[0].material) {
     this.mesh.children[0].material.color.setHex(0x252627);
   }
+  this.playAnimation('death');
 },
 attack () {
-  
-  if (this.status === "dead" || this._attackInterval) return; // Don't start another interval
+  if (this.status === "dead" || this._attackInterval) return;  
   this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
@@ -369,7 +418,7 @@ attack () {
   },
   playerAlignment: playerAlignment,
   health: 30,
-  damage: 10 ,
+  damage: 5 ,
   damage_interval: 1.2,
   armour: 0,
   range: 2.5,
@@ -403,16 +452,50 @@ attack () {
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
   nearestEnemy: [0, 0],
+  animationActionStash: {
+    attack: null,
+    movement: null,
+    death: null
+  },
+  playAnimation (animation) {
+      this.animationActionStash.attack.reset();
+
+      if (animation === 'death') {
+        this.animationActionStash.attack.stop();
+        this.animationActionStash.movement.stop();
+      this.animationActionStash.death.setLoop(THREE.LoopOnce, 1); 
+      this.animationActionStash.death.clampWhenFinished = true;
+      this.animationActionStash.death.play();
+    } else if (animation === 'attack') {
+        
+      if (this.animationActionStash.movement.isRunning()) {
+        this.animationActionStash.movement.stop();
+        this.animationActionStash.movement.reset();
+    }
+      this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
+      this.animationActionStash.attack.clampWhenFinished = true;
+      this.animationActionStash.attack.play();      
+    } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning()) {
+      this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
+      this.animationActionStash.movement.play();   
+    } 
+},
+
   attackAction () {
   if (this.target && this.target.health > 0) {
+    
     this.target.health = this.target.health-(this.damage-this.target.armour);
     
+    if (!this.animationActionStash.attack.isRunning()) {
+    this.playAnimation('attack');
+    }
+
     if (this.target.health <= 0) {
       this.target.death();
       this.target = null;
       if (this._attackInterval) {
       clearInterval(this._attackInterval); // Stop attacking after death
-      }
+      } 
     }
   }
 },
@@ -421,10 +504,10 @@ death () {
   if (this.mesh && this.mesh.children[0] && this.mesh.children[0].material) {
     this.mesh.children[0].material.color.setHex(0x252627);
   }
-
+  this.playAnimation('death');
 },
 attack () {
-  if (this.status === "dead" || this._attackInterval) return;  // Don't start another interval
+  if (this.status === "dead" || this._attackInterval) return;  
   this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
@@ -456,10 +539,10 @@ for (let i = 0; i < boardDepth; i++) {
     if (Math.random() > 0.95) {
       placementBoard[i][j] = "chaff";
   }
-    if (Math.random() <0.01) {
+    if (Math.random() <0.005) {
       placementBoard[i][j] = "tank";
     }
-    if (Math.random() <0.025) {
+    if (Math.random() <0.01) {
       placementBoard[i][j] = "bat";
     }
 }
@@ -511,6 +594,10 @@ placementBoard.forEach((row, i) => {
 });
 };
 
+// function for recursively changing units castShadow property to true
+
+
+
 // function that adds units to the array storing units for this round
 
 const addUnit = function(unit, playerAlignment, x, z) {
@@ -520,6 +607,17 @@ const addUnit = function(unit, playerAlignment, x, z) {
     const newUnit = activeUnits[activeUnits.length - 1];
       newUnit.mesh = gltf.scene;
       newUnit.mesh.position.copy(newUnit.position);
+
+      function setCastShadow(object) {
+        object.traverse(child => {
+        if (child.isMesh) {
+        child.castShadow = true;
+        }
+        });
+        }
+      
+       setCastShadow(newUnit.mesh);
+    
 
       if (gltf.animations && gltf.animations.length > 0) {
     newUnit.mixer = new THREE.AnimationMixer(gltf.scene);
@@ -535,12 +633,13 @@ const addUnit = function(unit, playerAlignment, x, z) {
       if (newUnit.mesh.position.z > -20) {
         switch (unit) {
         case "ratChaff":
-          newUnit.mesh.children[0].rotation.set(0,3.14159,0);
-          newUnit.mesh.children[0].material.color.setHex(0xE767C7);
+          newUnit.mesh.children[1].rotation.set(0,0,0);
+          //newUnit.mesh.children[0].material.color.setHex(0xE767C7);
+          console.log(newUnit);
           break;
         case "ratBat":
           newUnit.mesh.children[0].rotation.set(0,3.14159,0);
-          newUnit.mesh.children[0].material.color.setHex(0xE767C7);
+          
           break;
         case "ratTank":
           newUnit.mesh.children[0].rotation.set(0,0,0);
@@ -696,7 +795,9 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
                     unit.mesh.position.copy(unit.position);
                     if (unit.name === 'ratTank' && !unit.animationActionStash.attack.isRunning()) {
                       unit.playAnimation('movement');
-                    }   
+                    }  else if (unit.name != 'ratTank') {
+                      unit.playAnimation('movement');
+                    }
             }   
             
             
