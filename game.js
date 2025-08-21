@@ -75,8 +75,7 @@ const renderer = new THREE.WebGLRenderer(
   alpha: true}
 );
 
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.sortObjects = false;
 
 
 renderer.setClearColor(0xffffff, 0);
@@ -240,6 +239,8 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  meshMaterials: [],
+  meshOpacities: [],
   nearestEnemy: [0, 0],
   animationActionStash: {
     attack: null,
@@ -292,11 +293,45 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
 },
 death () {
   this.status = "dead";
-  if (this.mesh && this.mesh.children[0] && this.mesh.children[0].material) {
-    this.mesh.children[0].material.color.setHex(0x252627);
-  }
+ 
   this.playAnimation('death');
-},
+
+
+  this._fadeInterval = setInterval(() => {
+    let fadeComplete = false;
+    for (const material of this.meshMaterials) {
+      material.transparent = true;
+    }
+    for (const material of this.meshMaterials) {
+      if (material.opacity >= 0.05) {
+        material.opacity = material.opacity - 0.02;
+      } else if (material.opacity  < 0.05) {
+      fadeComplete = true;
+      }
+      if (fadeComplete) {
+        console.log("fade complete!");
+        materialCleanUp();
+      clearInterval(this._fadeInterval);
+      }
+    } 
+  }, 75);
+  
+  const materialCleanUp = () => {
+  this.mesh.traverse(obj => {
+    if (obj.isMesh) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(mat => mat.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    }
+  });
+  scene.remove(this.mesh);
+}
+}, 
 attack () {
   if (this.status === "dead" || this._attackInterval) return;  
   this.attackAction();
@@ -346,6 +381,8 @@ attack () {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  meshMaterials: [],
+  meshOpacities: [],
   nearestEnemy: [0, 0],
   animationActionStash: {
     attack: null,
@@ -398,11 +435,46 @@ attack () {
 },
 death () {
   this.status = "dead";
-  if (this.mesh && this.mesh.children[0] && this.mesh.children[0].material) {
-    this.mesh.children[0].material.color.setHex(0x252627);
-  }
+ 
   this.playAnimation('death');
-},
+
+
+  this._fadeInterval = setInterval(() => {
+    let fadeComplete = false;
+    for (const material of this.meshMaterials) {
+      material.transparent = true;
+    }
+    for (const material of this.meshMaterials) {
+      if (material.opacity >= 0.05) {
+        material.opacity = material.opacity - 0.02;
+      } else if (material.opacity  < 0.05) {
+      fadeComplete = true;
+      }
+      if (fadeComplete) {
+        console.log("fade complete!");
+        materialCleanUp();
+      
+      }
+    } 
+  }, 75);
+  
+  const materialCleanUp = () => {
+  this.mesh.traverse(obj => {
+    if (obj.isMesh) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(mat => mat.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    }
+  });
+  scene.remove(this.mesh);
+  clearInterval(this._fadeInterval);
+}
+}, 
 attack () {
   if (this.status === "dead" || this._attackInterval) return;  
   this.attackAction();
@@ -451,6 +523,8 @@ attack () {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  meshMaterials: [],
+  meshOpacities: [],
   nearestEnemy: [0, 0],
   animationActionStash: {
     attack: null,
@@ -501,11 +575,45 @@ attack () {
 },
 death () {
   this.status = "dead";
-  if (this.mesh && this.mesh.children[0] && this.mesh.children[0].material) {
-    this.mesh.children[0].material.color.setHex(0x252627);
-  }
+ 
   this.playAnimation('death');
-},
+
+
+  this._fadeInterval = setInterval(() => {
+    let fadeComplete = false;
+    for (const material of this.meshMaterials) {
+      material.transparent = true;
+    }
+    for (const material of this.meshMaterials) {
+      if (material.opacity >= 0.05) {
+        material.opacity = material.opacity - 0.02;
+      } else if (material.opacity  < 0.05) {
+      fadeComplete = true;
+      }
+      if (fadeComplete) {
+        console.log("fade complete!");
+        materialCleanUp();
+      clearInterval(this._fadeInterval);
+      }
+    } 
+  }, 75);
+  
+  const materialCleanUp = () => {
+  this.mesh.traverse(obj => {
+    if (obj.isMesh) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(mat => mat.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    }
+  });
+  scene.remove(this.mesh);
+}
+}, 
 attack () {
   if (this.status === "dead" || this._attackInterval) return;  
   this.attackAction();
@@ -607,16 +715,20 @@ const addUnit = function(unit, playerAlignment, x, z) {
     const newUnit = activeUnits[activeUnits.length - 1];
       newUnit.mesh = gltf.scene;
       newUnit.mesh.position.copy(newUnit.position);
-
-      function setCastShadow(object) {
+    
+      function collectMaterialColoursAndOpacity(object) {
         object.traverse(child => {
-        if (child.isMesh) {
-        child.castShadow = true;
+        if (child.isMesh && child.material && !newUnit.meshMaterials.includes(child.material)) {
+            
+            newUnit.meshMaterials.push(child.material);
+        } 
         }
-        });
+        );
         }
       
-       setCastShadow(newUnit.mesh);
+       collectMaterialColoursAndOpacity(newUnit.mesh);
+
+
     
 
       if (gltf.animations && gltf.animations.length > 0) {
