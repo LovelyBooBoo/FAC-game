@@ -75,6 +75,19 @@ const newShopUnitLocationMarkers = [];
 
 // function that loads units from gltfs into the shop
 
+// add sound to the camera and load sounds
+
+const listener = new THREE.AudioListener();
+camera.add( listener );
+
+let tankFireBuffer = null;
+const audioLoader = new THREE.AudioLoader();
+audioLoader.load('Assets/sounds/tankFire.wav', function(buffer) {
+  tankFireBuffer = buffer;
+});
+
+
+
 let newShopUnit;
 let selectedShopButton = null;
 let lastHighlightedGridCell = null;
@@ -88,10 +101,26 @@ const loadShopUnits = function() {
   }
 }
 
+// add sprite materials for firing of weapons
+
+const tankAttackMap1 = new THREE.TextureLoader().load( 'Assets/Textures/sprites/tank-attack/tankattack01.png', () => {
+  console.log('Texture loaded!')
+} );
+const tankAttackMaterial1 = new THREE.SpriteMaterial( { map: tankAttackMap1, transparent: true } );
+
+const tankAttackMap2 = new THREE.TextureLoader().load( 'Assets/Textures/sprites/tank-attack/tankattack02.png', () => {
+  console.log('Texture loaded!')
+}  );
+const tankAttackMaterial2 = new THREE.SpriteMaterial( { map: tankAttackMap2, transparent: true } );
+
+const attackSpriteTest = new THREE.Sprite( tankAttackMaterial2 );
+attackSpriteTest.position.set(0,1,0);
+scene.add(attackSpriteTest);
+
 // instantiate drag controls and unit shop array
 
 let currentFunds = 0;
-const currentShopStock = [{name: "ratChaff", cost: 50}, {name :"ratTank", cost: 150}, {name: "ratbat", cost: 125}];
+const currentShopStock = [{name: "ratChaff", cost: 50}, {name :"ratTank", cost: 150}, {name: "ratBat", cost: 125}];
 
 const unitShop = []
 const shopButtons = []
@@ -196,7 +225,8 @@ let startBattleButtonContainer = null;
 
 loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
   floor = gltf.scene;
-  floor.position.set(0,-0.05,0);
+  floor.position.set(-5,-0.05,0);
+  floor.scale.set(1.2,1.2,1);
   console.log(floor);
   scene.add(floor);
 
@@ -238,9 +268,9 @@ function onPointerMove( event ) {
 
 	// calculate pointer position in normalized device coordinates
 	// (-1 to +1) for both components
-
-	pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-	pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = - ((event.clientY - rect.top) / rect.height) * 2 + 1;
 
 }
 
@@ -308,7 +338,7 @@ function gamePhaseController () {
   const phase = gamePhases[currentPhaseIndex];
  switch (phase) {
     case "placement":
-      currentFunds += (currentGameRound * 100)
+      currentFunds += (currentGameRound * 200)
       updateFundsDisplay();
       startPlacementPhase();
       break;
@@ -336,7 +366,7 @@ function startPlacementPhase () {
 
   updateHealthDisplays();
 
-  numberUnitsToPlace = currentGameRound * 4
+  numberUnitsToPlace = 2 + currentGameRound
 
   boardUnitCleanUp();
   
@@ -347,6 +377,8 @@ function startPlacementPhase () {
   enemyPlacementController();
 
   unitInitialiser();
+
+  addUnit("ratoTron", "player", 5, 5);
 
 
 
@@ -383,6 +415,7 @@ for (let i = 0; i < 3; i++) {
   newShopUnitLocationMarkers.push(plane);
   scene.add( plane );
 }*/
+
 
 // function that loads in the shop units so that they can then be placed on board and spawn a unit
 
@@ -458,7 +491,7 @@ function startBattlePhase() {
     if (allOpponentUnitsDead) {
       const remainingPlayerUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "player").length
        roundResolveAlert("Player", "Opponent", remainingPlayerUnits);
-       OpponentHealth -= remainingPlayerUnits;
+       opponentHealth -= remainingPlayerUnits;
       clearInterval(battleWinCheckInterval);
       // handle win logic here
     }
@@ -567,7 +600,7 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   return this._name;
   },
   playerAlignment: playerAlignment,
-  health: 20,
+  health: 40,
   damage: 10 ,
   damage_interval: 1,
   armour: 0,
@@ -598,6 +631,7 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   get lastTarget() {
   return this._lastTarget;
   },
+  targetDirection: null,
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
@@ -634,6 +668,7 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
       
     }
 },
+attackPoint: null,
 
   attackAction () {
   if (this.target && this.target.health > 0) {
@@ -643,6 +678,8 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
     if (!this.animationActionStash.attack.isRunning()) {
     this.playAnimation('attack');
     }
+
+    this.attackSprite();
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -702,6 +739,21 @@ attack () {
   this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
+attackSprite () {
+      const attackSprite = new THREE.Sprite( tankAttackMaterial2 );
+      attackSprite.position.copy(this.mesh.position);
+      attackSprite.position.y += 1;
+      attackSprite.scale.set(1, 1, 1);
+       if (this.targetDirection) {
+       // Get angle in radians from targetDirection vector
+      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
+      attackSprite.material.rotation = angle + Math.PI / 2;// Yaw rotation
+      }
+      scene.add( attackSprite );  
+      setTimeout(() => {
+    scene.remove(attackSprite);
+      }, 500);  
+}
 }
 } else if (unitName === "ratTank") {
 
@@ -743,6 +795,7 @@ attack () {
   get lastTarget() {
   return this._lastTarget;
   },
+  targetDirection: null,
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
@@ -779,7 +832,7 @@ attack () {
       
     }
 },
-
+attackPoint: null,
   attackAction () {
   if (this.target && this.target.health > 0) {
     
@@ -788,6 +841,9 @@ attack () {
     if (!this.animationActionStash.attack.isRunning()) {
     this.playAnimation('attack');
     }
+
+    this.attackSprite();
+    this.attackSound();
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -848,6 +904,55 @@ attack () {
   this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
+attackSprite () {
+      const attackSprite = new THREE.Sprite( tankAttackMaterial1 );
+      const worldPos = new THREE.Vector3();
+      this.mesh.attackPoint.getWorldPosition(worldPos);
+      attackSprite.position.copy(worldPos);
+      console.log('attackPoint:', this.mesh.attackPoint);
+      attackSprite.material.depthTest = false;
+      attackSprite.material.depthWrite = false;
+      
+      
+      attackSprite.scale.set(1, 1, 1);
+       scene.add( attackSprite );  
+       setTimeout(() => {
+    attackSprite.material = tankAttackMaterial2
+    
+    attackSprite.material.depthTest = false;
+    attackSprite.material.depthWrite = false;
+      }, 200);  
+      setTimeout(() => {
+    scene.remove(attackSprite);
+      }, 500);  
+},
+attackSound () {
+  if (tankFireBuffer) {
+    const tankFireSound = new THREE.Audio(listener);
+    tankFireSound.setBuffer(tankFireBuffer);
+    tankFireSound.setLoop(false);
+
+    // Calculate distance from unit to camera's target (board center)
+    const cameraTarget = controls.target;
+    const unitPos = this.mesh.position;
+    const distance = unitPos.distanceTo(cameraTarget);
+
+    // Set volume based on distance (closer to center = louder)
+    const maxDistance = 10;
+    const minVolume = 0.1;
+    const maxVolume = 0.7;
+    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
+    volume = Math.max(minVolume, Math.min(maxVolume, volume));
+
+    tankFireSound.setVolume(volume);
+    tankFireSound.play();
+
+    setTimeout(() => {
+      tankFireSound.stop();
+      if (tankFireSound.parent) tankFireSound.parent.remove(tankFireSound);
+    }, 1500);
+  }
+}
 }
 } else if (unitName === "ratBat") {
   
@@ -857,7 +962,7 @@ attack () {
   return this._name;
   },
   playerAlignment: playerAlignment,
-  health: 30,
+  health: 50,
   damage: 5 ,
   damage_interval: 1.2,
   armour: 0,
@@ -888,6 +993,7 @@ attack () {
   get lastTarget() {
   return this._lastTarget;
   },
+  targetDirection: null,
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
@@ -916,13 +1022,15 @@ attack () {
     }
       this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
       this.animationActionStash.attack.clampWhenFinished = true;
-      this.animationActionStash.attack.play();      
+      this.animationActionStash.attack.play();
+       
+  
     } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning()) {
       this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
       this.animationActionStash.movement.play();   
     } 
 },
-
+attackPoint: null,
   attackAction () {
   if (this.target && this.target.health > 0) {
     
@@ -931,6 +1039,8 @@ attack () {
     if (!this.animationActionStash.attack.isRunning()) {
     this.playAnimation('attack');
     }
+
+    this.attackSprite();
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -990,6 +1100,184 @@ attack () {
   this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
+attackSprite () {
+      const attackSprite = new THREE.Sprite( tankAttackMaterial2 );
+      attackSprite.position.copy(this.mesh.position);
+      attackSprite.position.y += 1;
+      attackSprite.scale.set(1, 1, 1);
+       if (this.targetDirection) {
+       // Get angle in radians from targetDirection vector
+      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
+      attackSprite.material.rotation = angle + Math.PI / 2;// Yaw rotation
+      }
+      scene.add( attackSprite );  
+      setTimeout(() => {
+    scene.remove(attackSprite);
+      }, 500);  
+}
+}
+
+} else if (unitName === "ratoTron") {
+  
+  return {
+  _name: `${unitName}`,
+    get name() {
+  return this._name;
+  },
+  playerAlignment: playerAlignment,
+  health: 500,
+  damage: 150 ,
+  damage_interval: 2,
+  armour: 0,
+  range: 4,
+  speed: 0.015,
+  turningSpeed: 1,
+  fieldOfView: 25,
+  _size: 4,
+  get size() {return this._size;},
+  airborne: "no",
+  canAttack: "ground",
+  _status: "alive",
+  set status(val) {
+    this._status = val;
+  },
+  get status() {return this._status;},
+  _target: null,
+   set target(val) {
+    this._target = val;
+  },
+  get target() {
+  return this._target;
+  },
+   _lastTarget: null,
+   set lastTarget(val) {
+    this._lastTarget = val;
+  },
+  get lastTarget() {
+  return this._lastTarget;
+  },
+  targetDirection: null,
+  positionStart: new THREE.Vector3(x, 0, z),
+  position: new THREE.Vector3(x, 0, z),
+  mesh: null,
+  meshMaterials: [],
+  meshOpacities: [],
+  nearestEnemy: [0, 0],
+  animationActionStash: {
+    attack: null,
+    movement: null,
+    death: null
+  },
+  playAnimation (animation) {
+      this.animationActionStash.attack.reset();
+
+      if (animation === 'death') {
+        this.animationActionStash.attack.stop();
+        this.animationActionStash.movement.stop();
+      this.animationActionStash.death.setLoop(THREE.LoopOnce, 1); 
+      this.animationActionStash.death.clampWhenFinished = true;
+      this.animationActionStash.death.play();
+    } else if (animation === 'attack') {
+        
+      if (this.animationActionStash.movement.isRunning()) {
+        this.animationActionStash.movement.stop();
+        this.animationActionStash.movement.reset();
+    }
+      this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
+      this.animationActionStash.attack.clampWhenFinished = true;
+      this.animationActionStash.attack.play();
+       
+  
+    } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning()) {
+      this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
+      this.animationActionStash.movement.play();   
+    } 
+},
+attackPoint: null,
+  attackAction () {
+  if (this.target && this.target.health > 0) {
+    
+    this.target.health = this.target.health-(this.damage-this.target.armour);
+    
+    if (!this.animationActionStash.attack.isRunning()) {
+    this.playAnimation('attack');
+    }
+
+    this.attackSprite();
+
+    if (this.target.health <= 0) {
+      this.target.death();
+      this.target = null;
+      if (this._attackInterval) {
+      clearInterval(this._attackInterval); // Stop attacking after death
+      } 
+    }
+  }
+},
+death () {
+  this.status = "dead";
+  if (this._attackInterval) {
+    clearInterval(this._attackInterval);
+    this._attackInterval = null;
+  }
+  this.playAnimation('death');
+
+
+  this._fadeInterval = setInterval(() => {
+    let fadeComplete = false;
+    for (const material of this.meshMaterials) {
+      material.transparent = true;
+    }
+    for (const material of this.meshMaterials) {
+      if (material.opacity >= 0.05) {
+        material.opacity = material.opacity - 0.02;
+      } else if (material.opacity  < 0.05) {
+      fadeComplete = true;
+      }
+      if (fadeComplete) {
+        
+        materialCleanUp();
+      clearInterval(this._fadeInterval);
+      }
+    } 
+  }, 75);
+  
+  const materialCleanUp = () => {
+  this.mesh.traverse(obj => {
+    if (obj.isMesh) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(mat => mat.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    }
+  });
+  scene.remove(this.mesh);
+}
+}, 
+attack () {
+  if (this.status === "dead" || this._attackInterval) return;  
+  
+  this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
+},
+attackSprite () {
+      const attackSprite = new THREE.Sprite( tankAttackMaterial2 );
+      attackSprite.position.copy(this.mesh.position);
+      attackSprite.position.y += 1;
+      attackSprite.scale.set(1, 1, 1);
+       if (this.targetDirection) {
+       // Get angle in radians from targetDirection vector
+      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
+      attackSprite.material.rotation = angle + Math.PI / 2;// Yaw rotation
+      }
+      scene.add( attackSprite );  
+      setTimeout(() => {
+    scene.remove(attackSprite);
+      }, 500);  
+}
 }
 
 }
@@ -1043,7 +1331,17 @@ const addUnit = function(unit, playerAlignment, x, z) {
       
        collectMaterialColoursAndOpacity(newUnit.mesh);
 
+      function storeAttackPoint(object) {
+        object.traverse(child => {
+          if (child.name && child.name === "attackPoint") {
+            newUnit.mesh.attackPoint = child;
+          }
+        }
 
+        )
+      }
+
+      storeAttackPoint(newUnit.mesh);
     
 
       if (gltf.animations && gltf.animations.length > 0) {
@@ -1065,13 +1363,17 @@ const addUnit = function(unit, playerAlignment, x, z) {
           
           break;
         case "ratBat":
-          newUnit.mesh.children[0].rotation.set(0,3.14159,0);
+          newUnit.mesh.children[0].rotation.set(0,0,0);
           
           break;
         case "ratTank":
           newUnit.mesh.children[0].rotation.set(0,0,0);
+          break;
+        case "ratoTron":
+          newUnit.mesh.children[0].rotation.set(0,3.14159265,0)
         }
       }
+      console.log(newUnit);
       scene.add(newUnit.mesh);
 
 }, undefined, function ( error ) {
@@ -1187,6 +1489,7 @@ function movementAttackController () {
         // define constants direction and distance, direction being a vector from unit to its target
 
             const enemyDirection = new THREE.Vector3().subVectors(unit.target.position, unit.position);
+            unit.targetDirection = enemyDirection;
             const distance = enemyDirection.length();
           // ...rest of your movement/attack logic...
         
@@ -1291,7 +1594,7 @@ const raycaster = new THREE.Raycaster();
       (event.clientX / renderer.domElement.clientWidth) * 2 - 1,
       - ((event.clientY / renderer.domElement.clientHeight) * 2 - 1),
     );
-
+    
   raycaster.setFromCamera(pointer, camera);
   // Raycast
   const intersections = raycaster.intersectObjects(displayedGridMeshes, true);
@@ -1430,12 +1733,10 @@ function enemyPlacementController (){
     if (Math.random() > 0.96 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
       placementBoard[i][j] = "ratChaff";
       numberUnitsToPlace--;
-  }
-    if (Math.random() <0.03 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+  } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
       placementBoard[i][j] = "ratTank";
       numberUnitsToPlace--;
-    }
-    if (Math.random() <0.02 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+    } else if (Math.random() <0.02 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
       placementBoard[i][j] = "ratBat";
       numberUnitsToPlace--;
     }
