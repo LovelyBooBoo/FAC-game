@@ -19,6 +19,13 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { degToRad } from 'three/src/math/MathUtils.js';
 import { AnimationMixer } from 'three';
 import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { BleachBypassShader } from 'three/addons/shaders/BleachBypassShader.js';
+import { ColorCorrectionShader } from 'three/addons/shaders/ColorCorrectionShader.js';
+import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // instantiate the scene
 
@@ -28,21 +35,23 @@ const scene = new THREE.Scene();
 
 const loader = new GLTFLoader();
 
-
-// add lights to the scene
-
-const color = 0xFFFFFF;
-const intensity = 10;
-const light2 = new THREE.DirectionalLight(color, intensity);
-light2.position.set(80, 90, -15);
-light2.target.position.set(0, 0, -20);
-light2.castShadow = false;
-
-scene.add(light2);
-scene.add(light2.target);
+let composer;
 
 
-//const helper = new THREE.CameraHelper(light2.shadow.camera);
+const unitLightcolor = 0xFFFFFF;
+const unitLightIntensity = 9;
+const unitLight = new THREE.DirectionalLight(unitLightcolor, unitLightIntensity);
+unitLight.position.set(110, 90, -15);
+unitLight.target.position.set(0, 0, -20);
+unitLight.castShadow = false;
+
+scene.add(unitLight);
+scene.add(unitLight.target);
+
+
+
+
+//const helper = new THREE.CameraHelper(unitLight.shadow.camera);
 
 
 const light = new THREE.AmbientLight(0x404040, 4);
@@ -182,6 +191,32 @@ renderer.setClearColor(0xffffff, 0);
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 
+/*renderer.autoClear = false;
+
+				const renderModel = new RenderPass( scene, camera );
+
+				const effectBleach = new ShaderPass( BleachBypassShader );
+				const effectColor = new ShaderPass( ColorCorrectionShader );
+				const outputPass = new OutputPass();
+				const effectFXAA = new FXAAPass();
+
+				effectBleach.uniforms[ 'opacity' ].value = 1;
+
+				effectColor.uniforms[ 'powRGB' ].value.set( 1, 1, 1 );
+				effectColor.uniforms[ 'mulRGB' ].value.set( 1, 1, 1 );
+
+				const renderTarget = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture() } );
+
+				composer = new EffectComposer( renderer, renderTarget );
+
+				composer.addPass( renderModel );
+				composer.addPass( effectBleach );
+				composer.addPass( effectColor );
+				composer.addPass( outputPass );
+				composer.addPass( effectFXAA );
+
+        */
+
 // resize window when it's resized
 
 window.addEventListener('resize', () =>{
@@ -225,8 +260,8 @@ let startBattleButtonContainer = null;
 
 loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
   floor = gltf.scene;
-  floor.position.set(-5,-0.05,0);
-  floor.scale.set(1.2,1.2,1);
+  floor.position.set(0,-0.1,0);
+  floor.scale.set(1,1,1);
   console.log(floor);
   scene.add(floor);
 
@@ -574,6 +609,8 @@ movementAttackController();
   battleTimerDisplay.style.display = 'none';
 }
 
+
+  //composer.render();
 
   renderer.render(scene, camera);
   controls.update();
@@ -1318,6 +1355,30 @@ const addUnit = function(unit, playerAlignment, x, z) {
     const newUnit = activeUnits[activeUnits.length - 1];
       newUnit.mesh = gltf.scene;
       newUnit.mesh.position.copy(newUnit.position);
+
+      newUnit.mesh.traverse(child => {
+      if (child.isMesh) {
+    
+      const toonMaterial = new THREE.MeshToonMaterial({
+      name: child.material.name,
+      color: child.material.color,
+      map: child.material.map,
+      normalMap: child.material.normalMap,
+      transparent: true,
+      opacity: child.material.opacity
+      });
+     child.material = toonMaterial;
+      } 
+
+    /*newUnit.mesh.traverse(child => {
+        if (child.isMaterial && child.name === "Main" && playerAlignment === "player") {
+          child.color = new THREE.Color().setHex( 0x5951E7FF );
+        }
+      })
+*/    
+      
+      
+      });
     
       function collectMaterialColoursAndOpacity(object) {
         object.traverse(child => {
@@ -1328,8 +1389,18 @@ const addUnit = function(unit, playerAlignment, x, z) {
         }
         );
         }
-      
+
+        newUnit.meshMaterials = [];
        collectMaterialColoursAndOpacity(newUnit.mesh);
+
+      
+        for (let material of newUnit.meshMaterials) {
+          if (material.name === "Main" && playerAlignment === "player") {
+            material.color = new THREE.Color().setHex( 0x4267E7 );
+          }
+        }
+      
+      
 
       function storeAttackPoint(object) {
         object.traverse(child => {
@@ -1358,7 +1429,7 @@ const addUnit = function(unit, playerAlignment, x, z) {
       if (newUnit.mesh.position.z > -20) {
         switch (unit) {
         case "ratChaff":
-          newUnit.mesh.children[1].rotation.set(0,0,0);
+          newUnit.mesh.children[0].rotation.set(0,0,0);
           //newUnit.mesh.children[0].material.color.setHex(0xE767C7);
           
           break;
@@ -1766,6 +1837,10 @@ function roundResolveAlert(winner, loser, healthLost) {
     resolveAlertDiv.style.boxShadow = '0 2px 16px rgba(0,0,0,0.2)';
     document.body.appendChild(resolveAlertDiv);
   }
+  if (playerHealth < 1 || opponentHealth < 1) {
+      resolveAlertDiv.fontSize = '4rem'
+      resolveAlertDiv.textContent = `${winner} wins the rat war! Game Over. Refresh the page to play again`;
+  } else {
   resolveAlertDiv.textContent = `${winner} wins! ${loser} lost ${healthLost} health.`;
   resolveAlertDiv.style.display = 'block';
 
@@ -1782,7 +1857,7 @@ function roundResolveAlert(winner, loser, healthLost) {
     }
   );
   resolveAlertDiv.appendChild(continueBtn);
-  
+}
 
 }
 
