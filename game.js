@@ -327,6 +327,7 @@ let currentPhaseIndex = 0
 let battlePhaseDuration = 30; 
 let battlePhaseRemaining = battlePhaseDuration;
 let numberUnitsToPlace;
+let attacksAndMovementEnabler = false;
 
 // declare player and opponent health and display on screen
 
@@ -420,7 +421,7 @@ function startPlacementPhase () {
   // add a grid of meshes for raycasting on board points (and thereby placing units)
 
   for (let i = 0; i < 40; i++) {
-    if (i === 19 || i === 20) {
+    if (i >= 19) {
       continue;
     }
   for (let j = 0; j < 60; j++) {
@@ -504,6 +505,8 @@ function startBattlePhase() {
   startBattleButtonContainer = null;
   shopButtons.length = 0;
 
+  attacksAndMovementEnabler = true;
+
   for (const plane of displayedGridMeshes) {
     plane.visible = false;
   }
@@ -514,22 +517,38 @@ function startBattlePhase() {
     // check once per second to see if all units on either side are dead
 
     if (battleWinCheckInterval) clearInterval(battleWinCheckInterval);
-  battleWinCheckInterval = setInterval(() => {
+    battleWinCheckInterval = setInterval(() => {
     const allPlayerUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "player" && unit.status === "alive");
     const allOpponentUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "opponent" && unit.status === "alive");
     if (allPlayerUnitsDead) {
       const remainingOpponentUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "opponent").length
       roundResolveAlert("Opponent", "Player", remainingOpponentUnits)
       playerHealth -= remainingOpponentUnits;
+      clock.stop();
+      attacksAndMovementEnabler = false;
+      stopAllAttacks();
       clearInterval(battleWinCheckInterval);
-    }
-    if (allOpponentUnitsDead) {
+    } else if (allOpponentUnitsDead) {
       const remainingPlayerUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "player").length
        roundResolveAlert("Player", "Opponent", remainingPlayerUnits);
        opponentHealth -= remainingPlayerUnits;
+       clock.stop();
+       attacksAndMovementEnabler = false;
+       stopAllAttacks();
       clearInterval(battleWinCheckInterval);
-      // handle win logic here
-    }
+       } else if (!allOpponentUnitsDead && !allPlayerUnitsDead && battlePhaseRemaining <=0) {
+        const draw = true;
+        const remainingPlayerUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "player").length
+        const remainingOpponentUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "opponent").length
+        roundResolveAlert("Player", "Opponent", remainingOpponentUnits, draw, remainingPlayerUnits);
+        clock.stop();
+        attacksAndMovementEnabler = false;
+        opponentHealth -= remainingPlayerUnits;
+        playerHealth -= remainingOpponentUnits;
+        stopAllAttacks();
+        clearInterval(battleWinCheckInterval);
+      }
+
   }, 1000); 
 
 }
@@ -572,6 +591,7 @@ frames++;
   // get the delta from the game clock (so this is running to a set speed not animation refresh rate)
   const delta = clock.getDelta();
 
+    console.log(clock.elapsedTime);
   
   if (clock.elapsedTime > 30 && currentPhaseIndex === 1) {
     
@@ -587,8 +607,10 @@ frames++;
 }
 
 if (currentPhaseIndex === 1) {
-movementAttackController();
-  battlePhaseRemaining -= clock.getDelta();
+  if (attacksAndMovementEnabler) {
+  movementAttackController();
+  }
+  battlePhaseRemaining = (battlePhaseDuration - clock.getElapsedTime());
   if (battlePhaseRemaining < 0) {
     battlePhaseRemaining = 0;}
   battleTimerDisplay.textContent = `Battle Time: ${battlePhaseRemaining.toFixed(1)}s`;
@@ -804,7 +826,7 @@ attackSprite () {
   damage: 30,
   damage_interval: 2,
   armour: 2,
-  range: 6,
+  range: 8,
   speed: 0.01,
   turningSpeed: 0.5,
   fieldOfView: 30,
@@ -1003,7 +1025,7 @@ attackSound () {
   damage: 5 ,
   damage_interval: 1.2,
   armour: 0,
-  range: 2.5,
+  range: 6,
   speed: 0.03,
   turningSpeed: 2,
   fieldOfView: 45,
@@ -1615,7 +1637,7 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
 
               if (allyDistance <= unit.size + unit.target.size && distance > unit.range) {
                 allyDirection.normalize();
-                    unit.position.addScaledVector(allyDirection, unit.speed);
+                    unit.position.addScaledVector(allyDirection, unit.speed / 2);
                     unit.mesh.position.copy(unit.position);
               }
             }
@@ -1818,7 +1840,7 @@ function enemyPlacementController (){
 
 };
 
-function roundResolveAlert(winner, loser, healthLost) {
+function roundResolveAlert(winner, loser, healthLost, draw, drawHealthLost) {
   
   let resolveAlertDiv = document.getElementById('resolve-alert');
   if (!resolveAlertDiv) {
@@ -1841,8 +1863,14 @@ function roundResolveAlert(winner, loser, healthLost) {
       resolveAlertDiv.fontSize = '4rem'
       resolveAlertDiv.textContent = `${winner} wins the rat war! Game Over. Refresh the page to play again`;
   } else {
-  resolveAlertDiv.textContent = `${winner} wins! ${loser} lost ${healthLost} health.`;
+
+    if(playerHealth > 0 & opponentHealth > 0 && draw) {
+      resolveAlertDiv.textContent = `DRAW! Player lost ${healthLost} health, Opponent lost ${drawHealthLost} health,`;
+      resolveAlertDiv.style.display = 'block'
+    } else {resolveAlertDiv.textContent = `${winner} wins! ${loser} lost ${healthLost} health.`;
   resolveAlertDiv.style.display = 'block';
+    }
+  
 
   let continueBtn = buttonMaker(
     100, 
@@ -1907,4 +1935,13 @@ function boardUnitCleanUp () {
 function updateHealthDisplays() {
   playerHealthDisplay.textContent = `Player Health: ${playerHealth}`;
   opponentHealthDisplay.textContent = `Opponent Health: ${opponentHealth}`;
+}
+
+function stopAllAttacks () {
+  for (let unit of activeUnits) {
+    if (unit._attackInterval) {
+    clearInterval(unit._attackInterval)
+    unit._attackInterval = null;
+    }
+  }
 }
