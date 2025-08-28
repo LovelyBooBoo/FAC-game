@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MapControls } from 'three/addons/controls/MapControls.js';
-import { degToRad } from 'three/src/math/MathUtils.js';
+import { degToRad, radToDeg } from 'three/src/math/MathUtils.js';
 import { AnimationMixer } from 'three';
 import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -35,9 +35,6 @@ const scene = new THREE.Scene();
 
 const loader = new GLTFLoader();
 
-let composer;
-
-
 const unitLightcolor = 0xFFFFFF;
 const unitLightIntensity = 9;
 const unitLight = new THREE.DirectionalLight(unitLightcolor, unitLightIntensity);
@@ -48,25 +45,15 @@ unitLight.castShadow = false;
 scene.add(unitLight);
 scene.add(unitLight.target);
 
-
-
-
-//const helper = new THREE.CameraHelper(unitLight.shadow.camera);
-
-
 const light = new THREE.AmbientLight(0x404040, 4);
 scene.add( light );
 
-
-
-// add camera
+// instantiaite the camera
 
 const canvas = document.querySelector('canvas.threejs')
 
 const camera = new THREE.PerspectiveCamera(30, (window.innerWidth) / (window.innerHeight), 0.1, 150)
 camera.position.set(30, 80, 20);
-
-
 
 scene.add(camera)
 
@@ -74,15 +61,9 @@ scene.add(camera)
 
 const controls = new MapControls( camera, canvas );
 controls.enableDamping = true;
-controls.target.set(30, 0, -15);    // your desired look-at point
+controls.target.set(30, 0, -15);   
 controls.saveState();
 controls.update(); 
-
-
-// add a series of planes to the camera that are always relative to its position for then adding shop mesh objects
-const newShopUnitLocationMarkers = [];
-
-// function that loads units from gltfs into the shop
 
 // add sound to the camera and load sounds
 
@@ -95,20 +76,10 @@ audioLoader.load('Assets/sounds/tankFire.wav', function(buffer) {
   tankFireBuffer = buffer;
 });
 
-
-
 let newShopUnit;
 let selectedShopButton = null;
 let lastHighlightedGridCell = null;
 
-const loadShopUnits = function() {
-
-  for (let availableUnit of currentShopStock) {
-      
-  
-
-  }
-}
 
 // add sprite materials for firing of weapons
 
@@ -129,7 +100,24 @@ scene.add(attackSpriteTest);
 // instantiate drag controls and unit shop array
 
 let currentFunds = 0;
-const currentShopStock = [{name: "ratChaff", cost: 50}, {name :"ratTank", cost: 150}, {name: "ratBat", cost: 125}];
+const currentShopStock = [
+  {
+    name: "ratChaff", 
+    cost: 50, 
+    airVsGround: "ground", 
+    canAttack: "air & ground" 
+  }, 
+  {name :"ratTank", 
+  cost: 150,
+  airVsGround: "ground",
+  canAttack: "air & ground"
+}, 
+{name: "ratBat",
+cost: 125,
+airVsGround: "ground",
+canAttack: "air & ground"
+}
+];
 
 const unitShop = []
 const shopButtons = []
@@ -327,12 +315,13 @@ let currentPhaseIndex = 0
 let battlePhaseDuration = 30; 
 let battlePhaseRemaining = battlePhaseDuration;
 let numberUnitsToPlace;
+let enemyUnitsPreview = [];
 let attacksAndMovementEnabler = false;
 
 // declare player and opponent health and display on screen
 
-let playerHealth = 100;
-let opponentHealth = 100;
+let playerHealth = 50;
+let opponentHealth = 50;
 
 // Player health display (top left)
 const playerHealthDisplay = document.createElement('div');
@@ -374,7 +363,7 @@ function gamePhaseController () {
   const phase = gamePhases[currentPhaseIndex];
  switch (phase) {
     case "placement":
-      currentFunds += (currentGameRound * 200)
+      currentFunds += (currentGameRound * 50 + 100)
       updateFundsDisplay();
       startPlacementPhase();
       break;
@@ -387,6 +376,7 @@ function gamePhaseController () {
 }
 
 function startPlacementPhase () {
+  console.log(placementBoard);
   // reset the camera and lock the map controls
   camera.position.set(30, 80, 20);
   controls.reset();
@@ -412,7 +402,9 @@ function startPlacementPhase () {
 
   enemyPlacementController();
 
-  unitInitialiser();
+  unitInitialiser(placementBoard);
+
+  unitPreviewInitialiser();
 
   addUnit("ratoTron", "player", 5, 5);
 
@@ -437,62 +429,27 @@ function startPlacementPhase () {
   }
 }
 
-/*
-// Get a vector pointing to the right of the camera
-const cameraRight = new THREE.Vector3();
-cameraRight.crossVectors(camera.up, cameraDirection).normalize();
-
-for (let i = 0; i < 3; i++) {
-  const shopOffset = new THREE.Vector3(4, ((i - 12) * 1.2 ), (-4 -i * 1.1)); 
-  const geometry = new THREE.PlaneGeometry( 1, 1); 
-  const material = new THREE.MeshBasicMaterial( {color: 0xFF0000} ); 
-  const plane = new THREE.Mesh( geometry, material ); 
-  plane.position.copy(camera.position.clone().add(shopOffset))
-  newShopUnitLocationMarkers.push(plane);
-  scene.add( plane );
-}*/
-
 
 // function that loads in the shop units so that they can then be placed on board and spawn a unit
 
-loadShopUnits();
+//loadShopUnits();
 
+addStartBattleButton();
 
    // add a start battle button at bottom of the screen
-startBattleButtonContainer = document.createElement('div');
-startBattleButtonContainer.style.position = 'fixed';
-startBattleButtonContainer.style.left = '50%';
-startBattleButtonContainer.style.bottom = '30px'; // 30px from the bottom
-startBattleButtonContainer.style.transform = 'translateX(-50%)';
-startBattleButtonContainer.style.display = 'flex';
-startBattleButtonContainer.style.flexDirection = 'column';
-startBattleButtonContainer.style.gap = '20px';
-startBattleButtonContainer.style.zIndex = '1001';
 
-const btn = document.createElement('button');
-  btn.textContent = `Start Battle`;
-  btn.style.width = '300px';
-  btn.style.height = '100px';
-  btn.style.fontSize = '1.1rem';
-  btn.style.borderRadius = '8px';
-  btn.style.border = 'none';
-  btn.style.background = '#2d7be0';
-  btn.style.color = 'white';
-  btn.style.cursor = 'pointer';
-  btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-  btn.style.transition = 'background 0.2s';
-  btn.onmouseenter = () => btn.style.background = '#1756a9';
-  btn.onmouseleave = () => btn.style.background = '#2d7be0';
-  btn.addEventListener("click", startBattlePhase);
-
-  startBattleButtonContainer.appendChild(btn);
-  document.body.appendChild(startBattleButtonContainer);
 
 
 }
 
 function startBattlePhase() {
   console.log(placementBoard);
+  unitInitialiser(hiddenUnitsPlacementBoard);
+  clearHiddenUnitsPlacementBoard();
+  removeEnemyUnitsPreview();
+  enemyUnitsPreview.length = 0;
+
+  setTimeout(() => {
  currentPhaseIndex = 1;
  controls.reset();
   controls.enabled = true;
@@ -550,7 +507,7 @@ function startBattlePhase() {
       }
 
   }, 1000); 
-
+  }, 500);
 }
 
 
@@ -591,7 +548,7 @@ frames++;
   // get the delta from the game clock (so this is running to a set speed not animation refresh rate)
   const delta = clock.getDelta();
 
-    console.log(clock.elapsedTime);
+
   
   if (clock.elapsedTime > 30 && currentPhaseIndex === 1) {
     
@@ -694,6 +651,8 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  shadow: null,
+  shadowScale: 0.8,
   meshMaterials: [],
   meshOpacities: [],
   nearestEnemy: [0, 0],
@@ -858,6 +817,8 @@ attackSprite () {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  shadow: null,
+  shadowScale: 2.7,
   meshMaterials: [],
   meshOpacities: [],
   nearestEnemy: [0, 0],
@@ -1056,6 +1017,8 @@ attackSound () {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  shadow: null,
+  shadowScale: 0.8,
   meshMaterials: [],
   meshOpacities: [],
   nearestEnemy: [0, 0],
@@ -1219,6 +1182,8 @@ attackSprite () {
   positionStart: new THREE.Vector3(x, 0, z),
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
+  shadow: null,
+  shadowScale: 3,
   meshMaterials: [],
   meshOpacities: [],
   nearestEnemy: [0, 0],
@@ -1349,14 +1314,20 @@ const boardWidth = 60;
 const boardDepth = 40;
 
 let placementBoard =  [];
+let hiddenUnitsPlacementBoard = [];
+
+function boardCreator(board) {
 
 for (let i = 0; i < boardDepth; i++) {
-  placementBoard.push([]);
+    board.push([]);
   for (let j = 0; j < boardWidth; j++)  {
-    placementBoard[i].push("empty");
+    board[i].push("empty");
   }
 }
+}
 
+boardCreator(placementBoard);
+boardCreator(hiddenUnitsPlacementBoard);
 
 let playerUnitCount = 0;
 let EnemyUnitCount = 0;
@@ -1401,6 +1372,10 @@ const addUnit = function(unit, playerAlignment, x, z) {
       
       
       });
+
+      const shadow = createShadow(newUnit);
+      newUnit.mesh.add(shadow);
+      newUnit.shadow = shadow;
     
       function collectMaterialColoursAndOpacity(object) {
         object.traverse(child => {
@@ -1750,9 +1725,9 @@ function addShopButtons () {
   for (let i = 0; i < currentShopStock.length; i++) {
   const unit = currentShopStock[i];
   const btn = buttonMaker(
-    '200px',
-    '150px',
-    `${unit.name} - ${unit.cost}`,
+    '220px',
+    '170px',
+    `${unit.name} - ${unit.cost} - ${unit.airVsGround} unit - can attack ${unit.canAttack}`,
     () => {
     selectedShopButton = unit;
     floatingCursor.src = `Assets/Textures/cursor-icons/${unit.name}.png`; 
@@ -1819,26 +1794,48 @@ function showFundsWarning(message) {
 
 function enemyPlacementController (){
   
+  let depthOfPlacement = [];
+  const zeroToTwo = Math.floor(Math.random()*2.99)
+  switch(zeroToTwo) {
+    case 0: depthOfPlacement = [20, 27];
+    break;
+    case 1: depthOfPlacement = [27, 33];
+    break;
+    case 2: depthOfPlacement = [33, boardDepth];
+  }
 
-  for (let i = 20; i < boardDepth; i++) {
+  for (let i = depthOfPlacement[0]; i < depthOfPlacement[1]; i++) {
   for (let j = 0; j < boardWidth; j++)  {
     
-    if (Math.random() > 0.96 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
-      placementBoard[i][j] = "ratChaff";
+    if (Math.random() > 0.98 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+      hiddenUnitsPlacementBoard[i][j] = "ratChaff";
       numberUnitsToPlace--;
+      enemyUnitsPreview.push("ratChaff")
   } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
-      placementBoard[i][j] = "ratTank";
+      hiddenUnitsPlacementBoard[i][j] = "ratTank";
       numberUnitsToPlace--;
-    } else if (Math.random() <0.02 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
-      placementBoard[i][j] = "ratBat";
+      enemyUnitsPreview.push("ratTank")
+    } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+      hiddenUnitsPlacementBoard[i][j] = "ratBat";
       numberUnitsToPlace--;
+      enemyUnitsPreview.push("ratBat")
     }
 }
 }
 
 
-
 };
+
+function clearHiddenUnitsPlacementBoard() {
+  for (let i = 0; i < hiddenUnitsPlacementBoard.length; i++) {
+    for (let j = 0; j < hiddenUnitsPlacementBoard[i].length; j++) {
+      if (hiddenUnitsPlacementBoard[i][j] !== "empty") {
+        placementBoard[i][j] = hiddenUnitsPlacementBoard[i][j];
+        hiddenUnitsPlacementBoard[i][j] = "empty";
+      }
+    }
+  }
+}
 
 function roundResolveAlert(winner, loser, healthLost, draw, drawHealthLost) {
   
@@ -1889,8 +1886,8 @@ function roundResolveAlert(winner, loser, healthLost, draw, drawHealthLost) {
 
 }
 
-function unitInitialiser () {
-    placementBoard.forEach((row, i) => {
+function unitInitialiser (board) {
+    board.forEach((row, i) => {
   row.forEach((cell, j) => {
     
     let playerAlignment;
@@ -1906,6 +1903,61 @@ function unitInitialiser () {
     
   });
 });
+}
+
+function unitPreviewInitialiser() {
+  let previewBox = document.getElementById('enemy-units-preview');
+  if (previewBox) previewBox.remove();
+
+  // Create the preview box
+  previewBox = document.createElement('div');
+  previewBox.id = 'enemy-units-preview';
+  previewBox.style.position = 'fixed';
+  previewBox.style.top = '90px'; // Below health/timer/funds
+  previewBox.style.left = '50%';
+  previewBox.style.transform = 'translateX(-50%)';
+  previewBox.style.background = 'rgba(80, 80, 80, 0.95)';
+  previewBox.style.color = 'white';
+  previewBox.style.fontSize = '1.5rem';
+  previewBox.style.fontFamily = 'monospace';
+  previewBox.style.padding = '24px 48px';
+  previewBox.style.borderRadius = '16px';
+  previewBox.style.zIndex = '2003';
+  previewBox.style.boxShadow = '0 2px 16px rgba(0,0,0,0.2)';
+  previewBox.style.display = 'flex';
+  previewBox.style.flexDirection = 'column';
+  previewBox.style.alignItems = 'center';
+  previewBox.style.gap = '18px';
+
+  // Add the header text
+  const header = document.createElement('div');
+  header.textContent = 'Enemy units deploying this round...';
+  header.style.marginBottom = '12px';
+  header.style.fontWeight = 'bold';
+  previewBox.appendChild(header);
+
+  // Add icons for each unit in enemyUnitsPreview
+  const iconsRow = document.createElement('div');
+  iconsRow.style.display = 'flex';
+  iconsRow.style.gap = '12px';
+  iconsRow.style.flexWrap = 'wrap';
+  iconsRow.style.justifyContent = 'center';
+
+  enemyUnitsPreview.forEach(unitName => {
+    const icon = document.createElement('img');
+    icon.src = `Assets/Textures/shop-buttons/${unitName}.png`;
+    icon.alt = unitName;
+    icon.style.width = '64px';
+    icon.style.height = '40px';
+    icon.style.objectFit = 'contain';
+    icon.style.borderRadius = '6px';
+    icon.style.background = 'rgba(255,255,255,0.1)';
+    iconsRow.appendChild(icon);
+  });
+
+  previewBox.appendChild(iconsRow);
+
+  document.body.appendChild(previewBox);
 }
 
 function boardUnitCleanUp () {
@@ -1944,4 +1996,52 @@ function stopAllAttacks () {
     unit._attackInterval = null;
     }
   }
+}
+
+function removeEnemyUnitsPreview() {
+  const previewBox = document.getElementById('enemy-units-preview');
+  if (previewBox) {
+    previewBox.remove();
+  }
+}
+
+function addStartBattleButton() {
+  startBattleButtonContainer = document.createElement('div');
+startBattleButtonContainer.style.position = 'fixed';
+startBattleButtonContainer.style.left = '50%';
+startBattleButtonContainer.style.bottom = '30px'; // 30px from the bottom
+startBattleButtonContainer.style.transform = 'translateX(-50%)';
+startBattleButtonContainer.style.display = 'flex';
+startBattleButtonContainer.style.flexDirection = 'column';
+startBattleButtonContainer.style.gap = '20px';
+startBattleButtonContainer.style.zIndex = '1001';
+
+const btn = document.createElement('button');
+  btn.textContent = `Start Battle`;
+  btn.style.width = '300px';
+  btn.style.height = '100px';
+  btn.style.fontSize = '1.1rem';
+  btn.style.borderRadius = '8px';
+  btn.style.border = 'none';
+  btn.style.background = '#2d7be0';
+  btn.style.color = 'white';
+  btn.style.cursor = 'pointer';
+  btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+  btn.style.transition = 'background 0.2s';
+  btn.onmouseenter = () => btn.style.background = '#1756a9';
+  btn.onmouseleave = () => btn.style.background = '#2d7be0';
+  btn.addEventListener("click", startBattlePhase);
+
+  startBattleButtonContainer.appendChild(btn);
+  document.body.appendChild(startBattleButtonContainer);
+}
+
+function createShadow(unit) {
+  const shadowTexture = new THREE.TextureLoader().load('Assets/Textures/shadow/shadow.png');
+  const shadowMaterial = new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true });
+  const shadowPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), shadowMaterial);
+  shadowPlane.position.set(0, 0.01 + Math.random() * 0.01, 0); // Slightly above ground, random offset
+  shadowPlane.rotation.set(degToRad(-90), 0, 0);
+  shadowPlane.scale.set(unit.shadowScale, unit.shadowScale, 1); 
+  return shadowPlane;
 }
