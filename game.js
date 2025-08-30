@@ -21,10 +21,6 @@ import { AnimationMixer } from 'three';
 import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { BleachBypassShader } from 'three/addons/shaders/BleachBypassShader.js';
-import { ColorCorrectionShader } from 'three/addons/shaders/ColorCorrectionShader.js';
-import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // instantiate the scene
@@ -34,6 +30,8 @@ const scene = new THREE.Scene();
 // instantiate the Loader
 
 const loader = new GLTFLoader();
+
+// add ambient light and a side light to the scene
 
 const unitLightcolor = 0xFFFFFF;
 const unitLightIntensity = 9;
@@ -45,7 +43,7 @@ unitLight.castShadow = false;
 scene.add(unitLight);
 scene.add(unitLight.target);
 
-const light = new THREE.AmbientLight(0x404040, 4);
+const light = new THREE.AmbientLight(0x404040, 0);
 scene.add( light );
 
 // instantiaite the camera
@@ -67,19 +65,37 @@ controls.update();
 
 // add sound to the camera and load sounds
 
+const audioLoader = new THREE.AudioLoader(); 
 const listener = new THREE.AudioListener();
 camera.add( listener );
 
-let tankFireBuffer = null;
-const audioLoader = new THREE.AudioLoader();
-audioLoader.load('Assets/sounds/tankFire.wav', function(buffer) {
-  tankFireBuffer = buffer;
-});
+const soundBuffers = {
+tankFireBuffer: "tankFire",
+chaffFireBuffer: "chaffFire",
+batFireBuffer: "batFire",
+tronFireBuffer: "tronFire",
+gameMusicBuffer: "gameMusic"
+}
 
-let newShopUnit;
-let selectedShopButton = null;
-let lastHighlightedGridCell = null;
+let gameMusic = null;
 
+function autoLoadSounds (soundBuffers) {
+  for (let key of Object.keys(soundBuffers)) {
+  const sound = soundBuffers[key];
+  audioLoader.load(`Assets/sounds/${sound}.mp3`, function(buffer) {
+    soundBuffers[key] = buffer;
+    if (key === "gameMusicBuffer") {
+      gameMusic = new THREE.Audio(listener);
+      gameMusic.setBuffer(buffer);
+      gameMusic.setLoop(true);
+      let gameMusicVolume = 0.3;
+      gameMusic.setVolume(gameMusicVolume);
+    }
+  });
+}
+}
+
+autoLoadSounds(soundBuffers);
 
 // add sprite materials for firing of weapons
 
@@ -97,7 +113,56 @@ const attackSpriteTest = new THREE.Sprite( tankAttackMaterial2 );
 attackSpriteTest.position.set(0,1,0);
 scene.add(attackSpriteTest);
 
-// instantiate drag controls and unit shop array
+// particle system which is called by unit objects
+function weaponParticle(unitTargetDirection, unitTargetPosition, attackPoint, unitName) {
+  
+  let particleSize;
+  let particleColour;
+  let particleSpeed;
+
+  switch (unitName) {
+    case "ratTank": 
+    particleSize = 0.5;
+    particleColour = new THREE.Color().setHex( 0x1c0504 );
+    particleSpeed = 0.2
+    break;
+    case "ratChaff": particleSize = 0.3
+    particleColour = new THREE.Color().setHex( 0xfdff6e ); 
+    particleSpeed = 0.3;
+    break;
+    case "ratBat": particleSize = 0.25
+    particleColour = new THREE.Color().setHex( 0xfdff6e );
+    particleSpeed = 0.4;
+  }
+  
+  const sphereGeometry = new THREE.SphereGeometry(0.1,2,2)
+  const sphereMaterial = new THREE.PointsMaterial({
+  size: particleSize,
+  color: particleColour
+})
+
+const sphere = new THREE.Points(sphereGeometry, sphereMaterial);
+sphere.position.copy(attackPoint);
+scene.add(sphere);
+
+
+
+const tick = () => {
+    const particleDirection = new THREE.Vector3().copy(unitTargetDirection).normalize();
+    sphere.position.addScaledVector(particleDirection, particleSpeed);
+
+    
+  if (sphere.position.distanceTo(attackPoint) < unitTargetPosition.distanceTo(attackPoint)) {
+    window.requestAnimationFrame(tick);
+  } else {
+    scene.remove(sphere);
+  }
+}
+
+tick();
+}
+
+// define variables that store the player funds, and what units can be bought from the shop as well as an array to store shop button objects
 
 let currentFunds = 0;
 const currentShopStock = [
@@ -116,11 +181,19 @@ const currentShopStock = [
 cost: 125,
 airVsGround: "ground",
 canAttack: "air & ground"
+},
+{name: "ratoTron",
+cost: 500,
+airVsGround: "ground",
+canAttack: "ground"
 }
 ];
 
 const unitShop = []
 const shopButtons = []
+
+let selectedShopButton = null;
+let lastHighlightedGridCell = null;
 
 // add funds display to the top right of the screen displaying player's available funds
 
@@ -140,10 +213,6 @@ fundsDisplay.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
 fundsDisplay.textContent = `Funds: ${currentFunds}`;
 document.body.appendChild(fundsDisplay);
 
-// Function to update funds display
-function updateFundsDisplay() {
-  fundsDisplay.textContent = `Funds: ${currentFunds}`;
-}
 
 // add a clock element at the top of the screen 
 
@@ -173,43 +242,19 @@ const renderer = new THREE.WebGLRenderer(
   alpha: true}
 );
 
-
+// set scene background colour and size of renderer to the window's width and height
 
 renderer.setClearColor(0xffffff, 0);
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-/*renderer.autoClear = false;
 
-				const renderModel = new RenderPass( scene, camera );
-
-				const effectBleach = new ShaderPass( BleachBypassShader );
-				const effectColor = new ShaderPass( ColorCorrectionShader );
-				const outputPass = new OutputPass();
-				const effectFXAA = new FXAAPass();
-
-				effectBleach.uniforms[ 'opacity' ].value = 1;
-
-				effectColor.uniforms[ 'powRGB' ].value.set( 1, 1, 1 );
-				effectColor.uniforms[ 'mulRGB' ].value.set( 1, 1, 1 );
-
-				const renderTarget = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture() } );
-
-				composer = new EffectComposer( renderer, renderTarget );
-
-				composer.addPass( renderModel );
-				composer.addPass( effectBleach );
-				composer.addPass( effectColor );
-				composer.addPass( outputPass );
-				composer.addPass( effectFXAA );
-
-        */
-
-// resize window when it's resized
 
 window.addEventListener('resize', () =>{
-  camera.updateProjectionMatrix()
+  
   renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
 })
 
 const dragControls = new DragControls(unitShop, camera, renderer.domElement);
@@ -314,7 +359,7 @@ const gamePhases = ["placement", "battle"]
 let currentPhaseIndex = 0
 let battlePhaseDuration = 30; 
 let battlePhaseRemaining = battlePhaseDuration;
-let numberUnitsToPlace;
+let opponentFunds;
 let enemyUnitsPreview = [];
 let attacksAndMovementEnabler = false;
 
@@ -376,23 +421,18 @@ function gamePhaseController () {
 }
 
 function startPlacementPhase () {
+  
   console.log(placementBoard);
   // reset the camera and lock the map controls
   camera.position.set(30, 80, 20);
   controls.reset();
   controls.enabled = false;
   dragControls.enabled = true;
+  gameMusic.setVolume(0.3);
   
-  switch (currentPhaseIndex) {
-    case 1: currentShopStock.push({name: "ratTank", cost: 150});
-    break;
-    case 2: currentShopStock.push({name: "ratBat", cost: 125});
-    break;
-  }
-
   updateHealthDisplays();
 
-  numberUnitsToPlace = 2 + currentGameRound
+  opponentFunds = currentGameRound * 50 + 100
 
   boardUnitCleanUp();
   
@@ -405,9 +445,6 @@ function startPlacementPhase () {
   unitInitialiser(placementBoard);
 
   unitPreviewInitialiser();
-
-  addUnit("ratoTron", "player", 5, 5);
-
 
 
   // add a grid of meshes for raycasting on board points (and thereby placing units)
@@ -448,6 +485,7 @@ function startBattlePhase() {
   clearHiddenUnitsPlacementBoard();
   removeEnemyUnitsPreview();
   enemyUnitsPreview.length = 0;
+  gameMusic.setVolume(0.12);
 
   setTimeout(() => {
  currentPhaseIndex = 1;
@@ -697,7 +735,12 @@ attackPoint: null,
     this.playAnimation('attack');
     }
 
+    const worldPos = new THREE.Vector3();
+    this.mesh.attackPoint.getWorldPosition(worldPos);
+
     this.attackSprite();
+    this.attackSound();
+    weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -758,19 +801,53 @@ attack () {
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
 attackSprite () {
-      const attackSprite = new THREE.Sprite( tankAttackMaterial2 );
-      attackSprite.position.copy(this.mesh.position);
-      attackSprite.position.y += 1;
-      attackSprite.scale.set(1, 1, 1);
-       if (this.targetDirection) {
-       // Get angle in radians from targetDirection vector
-      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
-      attackSprite.material.rotation = angle + Math.PI / 2;// Yaw rotation
-      }
-      scene.add( attackSprite );  
+      const attackSprite = new THREE.Sprite( tankAttackMaterial1 );
+      const worldPos = new THREE.Vector3();
+      this.mesh.attackPoint.getWorldPosition(worldPos);
+      attackSprite.position.copy(worldPos);
+      
+      attackSprite.material.depthTest = false;
+      attackSprite.material.depthWrite = false;
+      
+      
+      attackSprite.scale.set(0.7, 0.7, 0.7);
+       scene.add( attackSprite );  
+       setTimeout(() => {
+    attackSprite.material = tankAttackMaterial2
+    
+    attackSprite.material.depthTest = false;
+    attackSprite.material.depthWrite = false;
+      }, 200);  
       setTimeout(() => {
     scene.remove(attackSprite);
       }, 500);  
+},
+attackSound () {
+  if (soundBuffers.chaffFireBuffer) {
+    const chaffFireSound = new THREE.Audio(listener);
+    chaffFireSound.setBuffer(soundBuffers.chaffFireBuffer);
+    chaffFireSound.setLoop(false);
+
+    // Calculate distance from unit to camera's target (board center)
+    const cameraTarget = controls.target;
+    const unitPos = this.mesh.position;
+    const distance = unitPos.distanceTo(cameraTarget);
+
+    // Set volume based on distance (closer to center = louder)
+    const maxDistance = 10;
+    const minVolume = 0.1;
+    const maxVolume = 0.9;
+    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
+    volume = Math.max(minVolume, Math.min(maxVolume, volume));
+
+    chaffFireSound.setVolume(volume);
+    chaffFireSound.play();
+
+    setTimeout(() => {
+      chaffFireSound.stop();
+      if (chaffFireSound.parent) chaffFireSound.parent.remove(chaffFireSound);
+    }, 1500);
+  }
 }
 }
 } else if (unitName === "ratTank") {
@@ -787,8 +864,8 @@ attackSprite () {
   armour: 2,
   range: 8,
   speed: 0.01,
-  turningSpeed: 0.5,
-  fieldOfView: 30,
+  turningSpeed: 0.25,
+  fieldOfView: 5,
   _size: 1.0,
    get size() {return this._size;},
   _target: null,
@@ -864,6 +941,14 @@ attackPoint: null,
 
     this.attackSprite();
     this.attackSound();
+    console.log(this.targetDirection);
+    console.log(this.target.position);
+    console.log(this.mesh.attackPoint);
+    
+    const worldPos = new THREE.Vector3();
+    this.mesh.attackPoint.getWorldPosition(worldPos);
+    
+    weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -921,7 +1006,6 @@ death () {
 }, 
 attack () {
   if (this.status === "dead" || this._attackInterval) return;  
-  this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
 attackSprite () {
@@ -929,7 +1013,7 @@ attackSprite () {
       const worldPos = new THREE.Vector3();
       this.mesh.attackPoint.getWorldPosition(worldPos);
       attackSprite.position.copy(worldPos);
-      console.log('attackPoint:', this.mesh.attackPoint);
+      
       attackSprite.material.depthTest = false;
       attackSprite.material.depthWrite = false;
       
@@ -947,9 +1031,9 @@ attackSprite () {
       }, 500);  
 },
 attackSound () {
-  if (tankFireBuffer) {
+  if (soundBuffers.tankFireBuffer) {
     const tankFireSound = new THREE.Audio(listener);
-    tankFireSound.setBuffer(tankFireBuffer);
+    tankFireSound.setBuffer(soundBuffers.tankFireBuffer);
     tankFireSound.setLoop(false);
 
     // Calculate distance from unit to camera's target (board center)
@@ -959,7 +1043,7 @@ attackSound () {
 
     // Set volume based on distance (closer to center = louder)
     const maxDistance = 10;
-    const minVolume = 0.1;
+    const minVolume = 0.2;
     const maxVolume = 0.7;
     let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
     volume = Math.max(minVolume, Math.min(maxVolume, volume));
@@ -982,8 +1066,8 @@ attackSound () {
   return this._name;
   },
   playerAlignment: playerAlignment,
-  health: 50,
-  damage: 5 ,
+  health: 30,
+  damage: 15,
   damage_interval: 1.2,
   armour: 0,
   range: 6,
@@ -1063,6 +1147,11 @@ attackPoint: null,
     }
 
     this.attackSprite();
+    this.attackSound ();
+    const worldPos = new THREE.Vector3();
+    this.mesh.attackPoint.getWorldPosition(worldPos);
+
+    weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -1123,19 +1212,53 @@ attack () {
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
 attackSprite () {
-      const attackSprite = new THREE.Sprite( tankAttackMaterial2 );
-      attackSprite.position.copy(this.mesh.position);
-      attackSprite.position.y += 1;
-      attackSprite.scale.set(1, 1, 1);
-       if (this.targetDirection) {
-       // Get angle in radians from targetDirection vector
-      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
-      attackSprite.material.rotation = angle + Math.PI / 2;// Yaw rotation
-      }
-      scene.add( attackSprite );  
+      const attackSprite = new THREE.Sprite( tankAttackMaterial1 );
+      const worldPos = new THREE.Vector3();
+      this.mesh.attackPoint.getWorldPosition(worldPos);
+      attackSprite.position.copy(worldPos);
+      
+      attackSprite.material.depthTest = false;
+      attackSprite.material.depthWrite = false;
+      
+      
+      attackSprite.scale.set(0.5, 0.5, 0.5);
+       scene.add( attackSprite );  
+       setTimeout(() => {
+    attackSprite.material = tankAttackMaterial2
+    
+    attackSprite.material.depthTest = false;
+    attackSprite.material.depthWrite = false;
+      }, 200);  
       setTimeout(() => {
     scene.remove(attackSprite);
       }, 500);  
+},
+attackSound () {
+  if (soundBuffers.batFireBuffer) {
+    const batFireSound = new THREE.Audio(listener);
+    batFireSound.setBuffer(soundBuffers.batFireBuffer);
+    batFireSound.setLoop(false);
+
+    // Calculate distance from unit to camera's target (board center)
+    const cameraTarget = controls.target;
+    const unitPos = this.mesh.position;
+    const distance = unitPos.distanceTo(cameraTarget);
+
+    // Set volume based on distance (closer to center = louder)
+    const maxDistance = 10;
+    const minVolume = 0.1;
+    const maxVolume = 0.33;
+    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
+    volume = Math.max(minVolume, Math.min(maxVolume, volume));
+
+    batFireSound.setVolume(volume);
+    batFireSound.play();
+
+    setTimeout(() => {
+      batFireSound.stop();
+      if (batFireSound.parent) batFireSound.parent.remove(batFireSound);
+    }, 1500);
+  }
 }
 }
 
@@ -1207,6 +1330,7 @@ attackSprite () {
         this.animationActionStash.movement.stop();
         this.animationActionStash.movement.reset();
     }
+      this.animationActionStash.attack.reset();
       this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
       this.animationActionStash.attack.clampWhenFinished = true;
       this.animationActionStash.attack.play();
@@ -1228,6 +1352,7 @@ attackPoint: null,
     }
 
     this.attackSprite();
+    this.attackSound();
 
     if (this.target.health <= 0) {
       this.target.death();
@@ -1301,6 +1426,33 @@ attackSprite () {
       setTimeout(() => {
     scene.remove(attackSprite);
       }, 500);  
+},
+attackSound () {
+  if (soundBuffers.tronFireBuffer) {
+    const tronFireSound = new THREE.Audio(listener);
+    tronFireSound.setBuffer(soundBuffers.tronFireBuffer);
+    tronFireSound.setLoop(false);
+
+    // Calculate distance from unit to camera's target (board center)
+    const cameraTarget = controls.target;
+    const unitPos = this.mesh.position;
+    const distance = unitPos.distanceTo(cameraTarget);
+
+    // Set volume based on distance (closer to center = louder)
+    const maxDistance = 10;
+    const minVolume = 0.1;
+    const maxVolume = 0.7;
+    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
+    volume = Math.max(minVolume, Math.min(maxVolume, volume));
+
+    tronFireSound.setVolume(volume);
+    tronFireSound.play();
+
+    setTimeout(() => {
+      tronFireSound.stop();
+      if (tronFireSound.parent) tronFireSound.parent.remove(tronFireSound);
+    }, 1500);
+  }
 }
 }
 
@@ -1477,6 +1629,7 @@ const introBtn = buttonMaker(
     introBtn.remove();
     currentGameRound++;
     gamePhaseController();
+    gameMusic.play();
   }
 );
 introBtn.style.position = 'fixed';
@@ -1643,7 +1796,7 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
           }
 
           // If in range and facing, start attack interval if not running
-          if (distance <= unit.range && Math.abs(angleDifference) < unit.fieldOfView) {
+          if (distance <= unit.range && Math.abs(angleDifference) < THREE.MathUtils.degToRad(unit.fieldOfView)) {
               if (!unit._attackInterval) {
               unit.attack();
               /*(`Calling attack() for ${unit.name} (${unit.playerAlignment}) on target ${unit.target?.name} (${unit.target?.playerAlignment})`);
@@ -1707,7 +1860,7 @@ function buttonMaker (width, height, text, onClick, options = {}) {
   btn.textContent = text;
   btn.style.width = options.width || width;
   btn.style.height = options.height || height;
-  btn.style.fontSize = options.fontSize || '1.1rem';
+  btn.style.fontSize = options.fontSize || 'clamp(0.6rem, 1vw, 1.2vh)';
   btn.style.borderRadius = options.borderRadius || '8px';
   btn.style.border = 'none';
   btn.style.background = options.background || '#2d7be0';
@@ -1725,8 +1878,8 @@ function addShopButtons () {
   for (let i = 0; i < currentShopStock.length; i++) {
   const unit = currentShopStock[i];
   const btn = buttonMaker(
-    '220px',
-    '170px',
+    '8.6vw',
+    '11.8vh',
     `${unit.name} - ${unit.cost} - ${unit.airVsGround} unit - can attack ${unit.canAttack}`,
     () => {
     selectedShopButton = unit;
@@ -1807,17 +1960,17 @@ function enemyPlacementController (){
   for (let i = depthOfPlacement[0]; i < depthOfPlacement[1]; i++) {
   for (let j = 0; j < boardWidth; j++)  {
     
-    if (Math.random() > 0.98 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+    if (Math.random() > 0.98 && placementBoard[i][j] == "empty" && opponentFunds >= 50) {
       hiddenUnitsPlacementBoard[i][j] = "ratChaff";
-      numberUnitsToPlace--;
+      opponentFunds -= 50;
       enemyUnitsPreview.push("ratChaff")
-  } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+  } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && opponentFunds >= 150  && currentGameRound > 1) {
       hiddenUnitsPlacementBoard[i][j] = "ratTank";
-      numberUnitsToPlace--;
+      opponentFunds -= 150;
       enemyUnitsPreview.push("ratTank")
-    } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && numberUnitsToPlace > 0) {
+    } else if (Math.random() <0.01 && placementBoard[i][j] == "empty" && opponentFunds >= 125 && currentGameRound > 3)   {
       hiddenUnitsPlacementBoard[i][j] = "ratBat";
-      numberUnitsToPlace--;
+      opponentFunds -= 125;
       enemyUnitsPreview.push("ratBat")
     }
 }
@@ -2044,4 +2197,10 @@ function createShadow(unit) {
   shadowPlane.rotation.set(degToRad(-90), 0, 0);
   shadowPlane.scale.set(unit.shadowScale, unit.shadowScale, 1); 
   return shadowPlane;
+}
+
+// Function to update funds display
+
+function updateFundsDisplay() {
+  fundsDisplay.textContent = `Funds: ${currentFunds}`;
 }
