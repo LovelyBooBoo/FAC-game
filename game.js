@@ -63,6 +63,18 @@ controls.target.set(30, 0, -15);
 controls.saveState();
 controls.update(); 
 
+// instantiate the renderer with alpha for transparency
+
+const renderer = new THREE.WebGLRenderer(
+  {canvas: canvas,
+  alpha: true}
+);
+
+// set scene background colour and size of renderer to the window's width and height
+
+renderer.setClearColor(0xffffff, 0);
+renderer.setSize(window.innerWidth, window.innerHeight);
+
 // add sound to the camera and load sounds
 
 const audioLoader = new THREE.AudioLoader(); 
@@ -76,6 +88,8 @@ batFireBuffer: "batFire",
 tronFireBuffer: "tronFire",
 gameMusicBuffer: "gameMusic"
 }
+
+// gamemusic must be declared here as it is not contained within a unit method
 
 let gameMusic = null;
 
@@ -97,7 +111,7 @@ function autoLoadSounds (soundBuffers) {
 
 autoLoadSounds(soundBuffers);
 
-// add sprite materials for firing of weapons
+// add sprite materials for firing of weapons, these have the name of tankAttackMaterial but apply for all units
 
 const tankAttackMap1 = new THREE.TextureLoader().load( 'Assets/Textures/sprites/tank-attack/tankattack01.png', () => {
   console.log('Texture loaded!')
@@ -113,9 +127,13 @@ const attackSpriteTest = new THREE.Sprite( tankAttackMaterial2 );
 attackSpriteTest.position.set(0,1,0);
 scene.add(attackSpriteTest);
 
-// particle system which is called by unit objects
+/* particle system which is called by unit objects and creates travelling particles that represent unit projectiles
+ the particle size and speed can be controlled for each unit by changing values in the swtich statement in the weaponParticle function*/
+
 function weaponParticle(unitTargetDirection, unitTargetPosition, attackPoint, unitName) {
   
+  if (unitName != "ratoTron") {
+
   let particleSize;
   let particleColour;
   let particleSpeed;
@@ -141,11 +159,11 @@ function weaponParticle(unitTargetDirection, unitTargetPosition, attackPoint, un
   color: particleColour
 })
 
+// each particle is made from a sphere geometry with a point material and "ticks" forward by the calculated amount once per frame
+
 const sphere = new THREE.Points(sphereGeometry, sphereMaterial);
 sphere.position.copy(attackPoint);
 scene.add(sphere);
-
-
 
 const tick = () => {
     const particleDirection = new THREE.Vector3().copy(unitTargetDirection).normalize();
@@ -160,6 +178,7 @@ const tick = () => {
 }
 
 tick();
+  }
 }
 
 // define variables that store the player funds, and what units can be bought from the shop as well as an array to store shop button objects
@@ -167,27 +186,27 @@ tick();
 let currentFunds = 0;
 const currentShopStock = [
   {
-    name: "ratChaff", 
-    cost: 50, 
-    airVsGround: "ground", 
-    canAttack: "air & ground" 
+  name: "ratChaff", 
+  cost: 50, 
+  airVsGround: "ground", 
+  canAttack: "air & ground" 
   }, 
   {name :"ratTank", 
   cost: 150,
   airVsGround: "ground",
   canAttack: "air & ground"
-}, 
-{name: "ratBat",
-cost: 125,
-airVsGround: "ground",
-canAttack: "air & ground"
-},
-{name: "ratoTron",
-cost: 500,
-airVsGround: "ground",
-canAttack: "ground"
-}
-];
+  }, 
+  {name: "ratBat",
+  cost: 125,
+  airVsGround: "ground",
+  canAttack: "air & ground"
+  },
+  {name: "ratoTron",
+  cost: 500,
+  airVsGround: "ground",
+  canAttack: "ground"
+  }
+  ];
 
 const unitShop = []
 const shopButtons = []
@@ -213,8 +232,7 @@ fundsDisplay.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
 fundsDisplay.textContent = `Funds: ${currentFunds}`;
 document.body.appendChild(fundsDisplay);
 
-
-// add a clock element at the top of the screen 
+// add a clock element at the top of the screen. This clock counts down during the battle phase
 
 const battleTimerDisplay = document.createElement('div');
 battleTimerDisplay.id = 'battle-timer';
@@ -234,22 +252,6 @@ battleTimerDisplay.textContent = '';
 battleTimerDisplay.style.display = 'none'; // Hidden by default
 document.body.appendChild(battleTimerDisplay);
 
-
-// instantiate the renderer with alpha for transparency
-
-const renderer = new THREE.WebGLRenderer(
-  {canvas: canvas,
-  alpha: true}
-);
-
-// set scene background colour and size of renderer to the window's width and height
-
-renderer.setClearColor(0xffffff, 0);
-
-renderer.setSize(window.innerWidth, window.innerHeight);
-
-
-
 window.addEventListener('resize', () =>{
   
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -257,10 +259,12 @@ window.addEventListener('resize', () =>{
   camera.updateProjectionMatrix();
 })
 
+// add drag controls to the scene which can be swapped out with map Controls between the rounds
+
 const dragControls = new DragControls(unitShop, camera, renderer.domElement);
 dragControls.transformGroup = true;
 
-// floating cursor
+// declare floating cursor which is used to create the small icons that follow the cursor when player is placing units
 
 const floatingCursor = document.createElement('img');
 floatingCursor.style.position = 'fixed';
@@ -295,7 +299,6 @@ loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
   floor = gltf.scene;
   floor.position.set(0,-0.1,0);
   floor.scale.set(1,1,1);
-  console.log(floor);
   scene.add(floor);
 
 }, undefined, function ( error ) {
@@ -304,11 +307,6 @@ loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
 
 } );
  
-
-// add an axes helper to keep the axes straight!
-
-const axesHelper = new THREE.AxesHelper( 5 );
-scene.add( axesHelper );
 
 // fps counter
 
@@ -422,7 +420,7 @@ function gamePhaseController () {
 
 function startPlacementPhase () {
   
-  console.log(placementBoard);
+  
   // reset the camera and lock the map controls
   camera.position.set(30, 80, 20);
   controls.reset();
@@ -480,12 +478,13 @@ addStartBattleButton();
 }
 
 function startBattlePhase() {
-  console.log(placementBoard);
+  
   unitInitialiser(hiddenUnitsPlacementBoard);
   clearHiddenUnitsPlacementBoard();
   removeEnemyUnitsPreview();
   enemyUnitsPreview.length = 0;
   gameMusic.setVolume(0.12);
+  roundResolved = false;
 
   setTimeout(() => {
  currentPhaseIndex = 1;
@@ -512,12 +511,13 @@ function startBattlePhase() {
     // check once per second to see if all units on either side are dead
 
     if (battleWinCheckInterval) clearInterval(battleWinCheckInterval);
+    
     battleWinCheckInterval = setInterval(() => {
     const allPlayerUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "player" && unit.status === "alive");
     const allOpponentUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "opponent" && unit.status === "alive");
     if (allPlayerUnitsDead) {
       const remainingOpponentUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "opponent").length
-      roundResolveAlert("Opponent", "Player", remainingOpponentUnits)
+      roundResolveAlert("Opponent", "Player", remainingOpponentUnits);
       playerHealth -= remainingOpponentUnits;
       clock.stop();
       attacksAndMovementEnabler = false;
@@ -583,7 +583,7 @@ frames++;
     fpsDisplay.textContent = `FPS: ${fps}`;
   }
 
-  // get the delta from the game clock (so this is running to a set speed not animation refresh rate)
+// get the delta from the game clock (so this is running to a set speed not animation refresh rate)
   const delta = clock.getDelta();
 
 
@@ -593,7 +593,6 @@ frames++;
     clock.stop();
     
   }
-
 
   for (let unit of activeUnits) {
   if (unit.mixer) {
@@ -612,15 +611,6 @@ if (currentPhaseIndex === 1) {
   if (battlePhaseRemaining === 0) {
     battleTimerDisplay.style.display = 'none';
 }
-
-
-/*if (currentGamePhase === "placement") {
-  for (marker of newShopUnitLocationMarkers) {
-    marker.position.copy(camera.position.clone().add(shopOffset))
-    marker.rotation.copy(camera.rotation)
-  }
-}*/
-  
 
 } else {
   battleTimerDisplay.style.display = 'none';
@@ -645,27 +635,51 @@ let activeUnits = [];
 
 // function that creates units based on specfications
 
+const unitInfo = {
+  ratChaff: {
+    health: 40, damage: 10, damage_interval: 1, armour: 0, range: 4, speed: 0.012, turningSpeed: 1,
+    fieldOfView: 45, _size: 0.5, airborne: "no", canAttack: "both", shadowScale: 0.8,
+    attackSoundBuffer: "chaffFireBuffer", spriteScale: 0.7, minVolume: 0.1, maxVolume: 0.9, damageTimeOut: 800
+  },
+  ratTank: {
+    health: 150, damage: 30, damage_interval: 2, armour: 2, range: 8, speed: 0.01, turningSpeed: 0.25,
+    fieldOfView: 5, _size: 1.0, airborne: "no", canAttack: "ground", shadowScale: 2.7,
+    attackSoundBuffer: "tankFireBuffer", spriteScale: 1, minVolume: 0.2, maxVolume: 0.8, damageTimeOut: 1800
+  },
+  ratBat: {
+    health: 30, damage: 15, damage_interval: 1.2, armour: 0, range: 6, speed: 0.03, turningSpeed: 2,
+    fieldOfView: 45, _size: 0.5, airborne: "yes", canAttack: "both", shadowScale: 0.8,
+    attackSoundBuffer: "batFireBuffer", spriteScale: 0.5, minVolume: 0.1, maxVolume: 0.33, damageTimeOut: 1000
+  },
+  ratoTron: {
+    health: 500, damage: 150, damage_interval: 2, armour: 0, range: 4, speed: 0.015, turningSpeed: 1, 
+    fieldOfView: 25, _size: 4, airborne: "no", canAttack: "ground", shadowScale: 3,
+    attackSoundBuffer: "tronFireBuffer", spriteScale: 0.7, minVolume: 0.1, maxVolume: 0.7, damageTimeOut: 1800
+  }
+};
+
 const unitFactory = function (unitName, playerAlignment, x, z) {
-  if (unitName === "ratChaff") {
-  
+ const importedUnitInfo = unitInfo[unitName];
+ console.log(importedUnitInfo);
+
   return {
   _name: `${unitName}`,
     get name() {
   return this._name;
   },
   playerAlignment: playerAlignment,
-  health: 40,
-  damage: 10 ,
-  damage_interval: 1,
-  armour: 0,
-  range: 4,
-  speed: 0.012,
-  turningSpeed: 1,
-  fieldOfView: 45,
-  _size: 0.5,
+  health: importedUnitInfo.health,
+  damage: importedUnitInfo.damage,
+  damage_interval: importedUnitInfo.damage_interval,
+  armour: importedUnitInfo.armour,
+  range: importedUnitInfo.range,
+  speed: importedUnitInfo.speed,
+  turningSpeed: importedUnitInfo.turningSpeed,
+  fieldOfView: importedUnitInfo.fieldOfView,
+  _size: importedUnitInfo._size,
   get size() {return this._size;},
-  airborne: "no",
-  canAttack: "both",
+  airborne: importedUnitInfo.airborne,
+  canAttack: importedUnitInfo.canAttack,
   _status: "alive",
  set status(val) {
     this._status = val;
@@ -690,15 +704,19 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
   position: new THREE.Vector3(x, 0, z),
   mesh: null,
   shadow: null,
-  shadowScale: 0.8,
+  shadowScale: importedUnitInfo.shadowScale,
   meshMaterials: [],
   meshOpacities: [],
   nearestEnemy: [0, 0],
+  attackSoundBuffer: importedUnitInfo.attackSoundBuffer,
   animationActionStash: {
     attack: null,
     movement: null,
     death: null
+    
   },
+  attackPoint: null,
+  cooldownUntil: 0,
   playAnimation (animation) {
       this.animationActionStash.attack.reset();
 
@@ -724,9 +742,8 @@ const unitFactory = function (unitName, playerAlignment, x, z) {
       
     }
 },
-attackPoint: null,
-
   attackAction () {
+    console.log(`the time is ${performance.now()} the cooldown is ${this.cooldownUntil}`);
   if (this.target && this.target.health > 0) {
     
     this.target.health = this.target.health-(this.damage-this.target.armour);
@@ -735,30 +752,49 @@ attackPoint: null,
     this.playAnimation('attack');
     }
 
+    if (this.name != "ratoTron") {
     const worldPos = new THREE.Vector3();
     this.mesh.attackPoint.getWorldPosition(worldPos);
 
     this.attackSprite();
+     weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
+    }
+
     this.attackSound();
-    weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
 
     if (this.target.health <= 0) {
       this.target.death();
-      this.target = null;
+      
+
       if (this._attackInterval) {
-      clearInterval(this._attackInterval); // Stop attacking after death
+      setTimeout(() => {
+        console.log(`clearing attack interval via attackAction! ${this.name}`);
+        this.target = null;
+        clearInterval(this._attackInterval); 
+      }, importedUnitInfo.damageTimeOut);  
+       
       } 
-    }
+    } 
   }
 },
 death () {
   this.status = "dead";
   if (this._attackInterval) {
+    console.log(`clearing attack interval via death! ${this.name}`);
     clearInterval(this._attackInterval);
     this._attackInterval = null;
   }
   this.playAnimation('death');
 
+   for (const otherUnit of activeUnits) {
+    if (otherUnit.target === this) {
+      otherUnit.cooldownUntil = performance.now() + otherUnit.damage_interval * 1000;
+      if (otherUnit._attackInterval) {
+        clearInterval(otherUnit._attackInterval);
+        otherUnit._attackInterval = null;
+      }
+    }
+  }
 
   this._fadeInterval = setInterval(() => {
     let fadeComplete = false;
@@ -796,7 +832,10 @@ death () {
 }
 }, 
 attack () {
+  console.log(`Attack called on ${this.name}`)
   if (this.status === "dead" || this._attackInterval) return;  
+  if (performance.now() < this.cooldownUntil) return;
+  console.log(performance.now());
   this.attackAction();
   this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
 },
@@ -810,7 +849,7 @@ attackSprite () {
       attackSprite.material.depthWrite = false;
       
       
-      attackSprite.scale.set(0.7, 0.7, 0.7);
+      attackSprite.scale.set(importedUnitInfo.spriteScale, importedUnitInfo.spriteScale, importedUnitInfo.spriteScale);
        scene.add( attackSprite );  
        setTimeout(() => {
     attackSprite.material = tankAttackMaterial2
@@ -823,10 +862,12 @@ attackSprite () {
       }, 500);  
 },
 attackSound () {
-  if (soundBuffers.chaffFireBuffer) {
-    const chaffFireSound = new THREE.Audio(listener);
-    chaffFireSound.setBuffer(soundBuffers.chaffFireBuffer);
-    chaffFireSound.setLoop(false);
+    
+  if (soundBuffers[this.attackSoundBuffer]) {
+    
+    const sound = new THREE.Audio(listener);
+    sound.setBuffer(soundBuffers[this.attackSoundBuffer]);
+    sound.setLoop(false);
 
     // Calculate distance from unit to camera's target (board center)
     const cameraTarget = controls.target;
@@ -835,628 +876,22 @@ attackSound () {
 
     // Set volume based on distance (closer to center = louder)
     const maxDistance = 10;
-    const minVolume = 0.1;
-    const maxVolume = 0.9;
+    const minVolume = importedUnitInfo.minVolume;
+    const maxVolume = importedUnitInfo.maxVolume;
     let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
     volume = Math.max(minVolume, Math.min(maxVolume, volume));
 
-    chaffFireSound.setVolume(volume);
-    chaffFireSound.play();
+    sound.setVolume(volume);
+    sound.play();
 
     setTimeout(() => {
-      chaffFireSound.stop();
-      if (chaffFireSound.parent) chaffFireSound.parent.remove(chaffFireSound);
-    }, 1500);
-  }
-}
-}
-} else if (unitName === "ratTank") {
-
-  return {
-  _name: `${unitName}`,
-    get name() {
-  return this._name;
-  },
-  playerAlignment: playerAlignment,
-  health: 200,
-  damage: 30,
-  damage_interval: 2,
-  armour: 2,
-  range: 8,
-  speed: 0.01,
-  turningSpeed: 0.25,
-  fieldOfView: 5,
-  _size: 1.0,
-   get size() {return this._size;},
-  _target: null,
-  airborne: "no",
-  canAttack: "ground",
-  _status: "alive",
-  set status(val) {
-    this._status = val;
-  },
-  get status() {return this._status;},
-  _target: null,
-   set target(val) {
-    this._target = val;
-  },
-  get target() {
-  return this._target;
-  },
-   _lastTarget: null,
-   set lastTarget(val) {
-    this._lastTarget = val;
-  },
-  get lastTarget() {
-  return this._lastTarget;
-  },
-  targetDirection: null,
-  positionStart: new THREE.Vector3(x, 0, z),
-  position: new THREE.Vector3(x, 0, z),
-  mesh: null,
-  shadow: null,
-  shadowScale: 2.7,
-  meshMaterials: [],
-  meshOpacities: [],
-  nearestEnemy: [0, 0],
-  animationActionStash: {
-    attack: null,
-    movement: null,
-    death: null
-  },
-  playAnimation (animation) {
-      this.animationActionStash.attack.reset();
-
-      if (animation === 'death') {
-        this.animationActionStash.attack.stop();
-        this.animationActionStash.movement.stop();
-      this.animationActionStash.death.setLoop(THREE.LoopOnce, 1); 
-      this.animationActionStash.death.clampWhenFinished = true;
-      this.animationActionStash.death.play();
-    } else if (animation === 'attack') {
-        
-      if (this.animationActionStash.movement.isRunning()) {
-        this.animationActionStash.movement.stop();
-        this.animationActionStash.movement.reset();
-    }
-      this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
-      this.animationActionStash.attack.clampWhenFinished = true;
-      this.animationActionStash.attack.play();      
-    } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning() && !this.animationActionStash.attack.isRunning()) {
-      this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
-      this.animationActionStash.movement.play();   
-    } if (animation === 'movement' && this.animationActionStash.movement.isRunning()) {
-      
-    }
-},
-attackPoint: null,
-  attackAction () {
-  if (this.target && this.target.health > 0) {
-    
-    this.target.health = this.target.health-(this.damage-this.target.armour);
-    
-    if (!this.animationActionStash.attack.isRunning()) {
-    this.playAnimation('attack');
-    }
-
-    this.attackSprite();
-    this.attackSound();
-    console.log(this.targetDirection);
-    console.log(this.target.position);
-    console.log(this.mesh.attackPoint);
-    
-    const worldPos = new THREE.Vector3();
-    this.mesh.attackPoint.getWorldPosition(worldPos);
-    
-    weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
-
-    if (this.target.health <= 0) {
-      this.target.death();
-      this.target = null;
-      if (this._attackInterval) {
-      clearInterval(this._attackInterval); // Stop attacking after death
-      } 
-    }
-  }
-},
-death () {
-  this.status = "dead";
-  if (this._attackInterval) {
-    clearInterval(this._attackInterval);
-    this._attackInterval = null;
-  }
-  this.playAnimation('death');
-
-
-  this._fadeInterval = setInterval(() => {
-    let fadeComplete = false;
-    for (const material of this.meshMaterials) {
-      material.transparent = true;
-    }
-    for (const material of this.meshMaterials) {
-      if (material.opacity >= 0.05) {
-        material.opacity = material.opacity - 0.02;
-      } else if (material.opacity  < 0.05) {
-      fadeComplete = true;
-      }
-      if (fadeComplete) {
-        
-        materialCleanUp();
-      
-      }
-    } 
-  }, 75);
-  
-  const materialCleanUp = () => {
-  this.mesh.traverse(obj => {
-    if (obj.isMesh) {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(mat => mat.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    }
-  });
-  scene.remove(this.mesh);
-  clearInterval(this._fadeInterval);
-}
-}, 
-attack () {
-  if (this.status === "dead" || this._attackInterval) return;  
-  this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
-},
-attackSprite () {
-      const attackSprite = new THREE.Sprite( tankAttackMaterial1 );
-      const worldPos = new THREE.Vector3();
-      this.mesh.attackPoint.getWorldPosition(worldPos);
-      attackSprite.position.copy(worldPos);
-      
-      attackSprite.material.depthTest = false;
-      attackSprite.material.depthWrite = false;
-      
-      
-      attackSprite.scale.set(1, 1, 1);
-       scene.add( attackSprite );  
-       setTimeout(() => {
-    attackSprite.material = tankAttackMaterial2
-    
-    attackSprite.material.depthTest = false;
-    attackSprite.material.depthWrite = false;
-      }, 200);  
-      setTimeout(() => {
-    scene.remove(attackSprite);
-      }, 500);  
-},
-attackSound () {
-  if (soundBuffers.tankFireBuffer) {
-    const tankFireSound = new THREE.Audio(listener);
-    tankFireSound.setBuffer(soundBuffers.tankFireBuffer);
-    tankFireSound.setLoop(false);
-
-    // Calculate distance from unit to camera's target (board center)
-    const cameraTarget = controls.target;
-    const unitPos = this.mesh.position;
-    const distance = unitPos.distanceTo(cameraTarget);
-
-    // Set volume based on distance (closer to center = louder)
-    const maxDistance = 10;
-    const minVolume = 0.2;
-    const maxVolume = 0.7;
-    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
-    volume = Math.max(minVolume, Math.min(maxVolume, volume));
-
-    tankFireSound.setVolume(volume);
-    tankFireSound.play();
-
-    setTimeout(() => {
-      tankFireSound.stop();
-      if (tankFireSound.parent) tankFireSound.parent.remove(tankFireSound);
-    }, 1500);
-  }
-}
-}
-} else if (unitName === "ratBat") {
-  
-  return {
-  _name: `${unitName}`,
-    get name() {
-  return this._name;
-  },
-  playerAlignment: playerAlignment,
-  health: 30,
-  damage: 15,
-  damage_interval: 1.2,
-  armour: 0,
-  range: 6,
-  speed: 0.03,
-  turningSpeed: 2,
-  fieldOfView: 45,
-  _size: 0.5,
-  get size() {return this._size;},
-  airborne: "yes",
-  canAttack: "both",
-  _status: "alive",
-  set status(val) {
-    this._status = val;
-  },
-  get status() {return this._status;},
-  _target: null,
-   set target(val) {
-    this._target = val;
-  },
-  get target() {
-  return this._target;
-  },
-   _lastTarget: null,
-   set lastTarget(val) {
-    this._lastTarget = val;
-  },
-  get lastTarget() {
-  return this._lastTarget;
-  },
-  targetDirection: null,
-  positionStart: new THREE.Vector3(x, 0, z),
-  position: new THREE.Vector3(x, 0, z),
-  mesh: null,
-  shadow: null,
-  shadowScale: 0.8,
-  meshMaterials: [],
-  meshOpacities: [],
-  nearestEnemy: [0, 0],
-  animationActionStash: {
-    attack: null,
-    movement: null,
-    death: null
-  },
-  playAnimation (animation) {
-      this.animationActionStash.attack.reset();
-
-      if (animation === 'death') {
-        this.animationActionStash.attack.stop();
-        this.animationActionStash.movement.stop();
-      this.animationActionStash.death.setLoop(THREE.LoopOnce, 1); 
-      this.animationActionStash.death.clampWhenFinished = true;
-      this.animationActionStash.death.play();
-    } else if (animation === 'attack') {
-        
-      if (this.animationActionStash.movement.isRunning()) {
-        this.animationActionStash.movement.stop();
-        this.animationActionStash.movement.reset();
-    }
-      this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
-      this.animationActionStash.attack.clampWhenFinished = true;
-      this.animationActionStash.attack.play();
-       
-  
-    } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning()) {
-      this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
-      this.animationActionStash.movement.play();   
-    } 
-},
-attackPoint: null,
-  attackAction () {
-  if (this.target && this.target.health > 0) {
-    
-    this.target.health = this.target.health-(this.damage-this.target.armour);
-    
-    if (!this.animationActionStash.attack.isRunning()) {
-    this.playAnimation('attack');
-    }
-
-    this.attackSprite();
-    this.attackSound ();
-    const worldPos = new THREE.Vector3();
-    this.mesh.attackPoint.getWorldPosition(worldPos);
-
-    weaponParticle(this.targetDirection, this.target.position, worldPos, this.name);
-
-    if (this.target.health <= 0) {
-      this.target.death();
-      this.target = null;
-      if (this._attackInterval) {
-      clearInterval(this._attackInterval); // Stop attacking after death
-      } 
-    }
-  }
-},
-death () {
-  this.status = "dead";
-  if (this._attackInterval) {
-    clearInterval(this._attackInterval);
-    this._attackInterval = null;
-  }
-  this.playAnimation('death');
-
-
-  this._fadeInterval = setInterval(() => {
-    let fadeComplete = false;
-    for (const material of this.meshMaterials) {
-      material.transparent = true;
-    }
-    for (const material of this.meshMaterials) {
-      if (material.opacity >= 0.05) {
-        material.opacity = material.opacity - 0.02;
-      } else if (material.opacity  < 0.05) {
-      fadeComplete = true;
-      }
-      if (fadeComplete) {
-        
-        materialCleanUp();
-      clearInterval(this._fadeInterval);
-      }
-    } 
-  }, 75);
-  
-  const materialCleanUp = () => {
-  this.mesh.traverse(obj => {
-    if (obj.isMesh) {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(mat => mat.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    }
-  });
-  scene.remove(this.mesh);
-}
-}, 
-attack () {
-  if (this.status === "dead" || this._attackInterval) return;  
-  this.attackAction();
-  this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
-},
-attackSprite () {
-      const attackSprite = new THREE.Sprite( tankAttackMaterial1 );
-      const worldPos = new THREE.Vector3();
-      this.mesh.attackPoint.getWorldPosition(worldPos);
-      attackSprite.position.copy(worldPos);
-      
-      attackSprite.material.depthTest = false;
-      attackSprite.material.depthWrite = false;
-      
-      
-      attackSprite.scale.set(0.5, 0.5, 0.5);
-       scene.add( attackSprite );  
-       setTimeout(() => {
-    attackSprite.material = tankAttackMaterial2
-    
-    attackSprite.material.depthTest = false;
-    attackSprite.material.depthWrite = false;
-      }, 200);  
-      setTimeout(() => {
-    scene.remove(attackSprite);
-      }, 500);  
-},
-attackSound () {
-  if (soundBuffers.batFireBuffer) {
-    const batFireSound = new THREE.Audio(listener);
-    batFireSound.setBuffer(soundBuffers.batFireBuffer);
-    batFireSound.setLoop(false);
-
-    // Calculate distance from unit to camera's target (board center)
-    const cameraTarget = controls.target;
-    const unitPos = this.mesh.position;
-    const distance = unitPos.distanceTo(cameraTarget);
-
-    // Set volume based on distance (closer to center = louder)
-    const maxDistance = 10;
-    const minVolume = 0.1;
-    const maxVolume = 0.33;
-    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
-    volume = Math.max(minVolume, Math.min(maxVolume, volume));
-
-    batFireSound.setVolume(volume);
-    batFireSound.play();
-
-    setTimeout(() => {
-      batFireSound.stop();
-      if (batFireSound.parent) batFireSound.parent.remove(batFireSound);
+      sound.stop();
+      if (sound.parent) sound.parent.remove(sound);
     }, 1500);
   }
 }
 }
 
-} else if (unitName === "ratoTron") {
-  
-  return {
-  _name: `${unitName}`,
-    get name() {
-  return this._name;
-  },
-  playerAlignment: playerAlignment,
-  health: 500,
-  damage: 150 ,
-  damage_interval: 2,
-  armour: 0,
-  range: 4,
-  speed: 0.015,
-  turningSpeed: 1,
-  fieldOfView: 25,
-  _size: 4,
-  get size() {return this._size;},
-  airborne: "no",
-  canAttack: "ground",
-  _status: "alive",
-  set status(val) {
-    this._status = val;
-  },
-  get status() {return this._status;},
-  _target: null,
-   set target(val) {
-    this._target = val;
-  },
-  get target() {
-  return this._target;
-  },
-   _lastTarget: null,
-   set lastTarget(val) {
-    this._lastTarget = val;
-  },
-  get lastTarget() {
-  return this._lastTarget;
-  },
-  targetDirection: null,
-  positionStart: new THREE.Vector3(x, 0, z),
-  position: new THREE.Vector3(x, 0, z),
-  mesh: null,
-  shadow: null,
-  shadowScale: 3,
-  meshMaterials: [],
-  meshOpacities: [],
-  nearestEnemy: [0, 0],
-  animationActionStash: {
-    attack: null,
-    movement: null,
-    death: null
-  },
-  playAnimation (animation) {
-      this.animationActionStash.attack.reset();
-
-      if (animation === 'death') {
-        this.animationActionStash.attack.stop();
-        this.animationActionStash.movement.stop();
-      this.animationActionStash.death.setLoop(THREE.LoopOnce, 1); 
-      this.animationActionStash.death.clampWhenFinished = true;
-      this.animationActionStash.death.play();
-    } else if (animation === 'attack') {
-        
-      if (this.animationActionStash.movement.isRunning()) {
-        this.animationActionStash.movement.stop();
-        this.animationActionStash.movement.reset();
-    }
-      this.animationActionStash.attack.reset();
-      this.animationActionStash.attack.setLoop(THREE.LoopOnce, 1); 
-      this.animationActionStash.attack.clampWhenFinished = true;
-      this.animationActionStash.attack.play();
-       
-  
-    } else if (animation === 'movement' && !this.animationActionStash.movement.isRunning()) {
-      this.animationActionStash.movement.setLoop(THREE.LoopRepeat, Infinity); 
-      this.animationActionStash.movement.play();   
-    } 
-},
-attackPoint: null,
-  attackAction () {
-  if (this.target && this.target.health > 0) {
-    
-    this.target.health = this.target.health-(this.damage-this.target.armour);
-    
-    if (!this.animationActionStash.attack.isRunning()) {
-    this.playAnimation('attack');
-    }
-
-    this.attackSprite();
-    this.attackSound();
-
-    if (this.target.health <= 0) {
-      this.target.death();
-      this.target = null;
-      if (this._attackInterval) {
-      clearInterval(this._attackInterval); // Stop attacking after death
-      } 
-    }
-  }
-},
-death () {
-  this.status = "dead";
-  if (this._attackInterval) {
-    clearInterval(this._attackInterval);
-    this._attackInterval = null;
-  }
-  this.playAnimation('death');
-
-
-  this._fadeInterval = setInterval(() => {
-    let fadeComplete = false;
-    for (const material of this.meshMaterials) {
-      material.transparent = true;
-    }
-    for (const material of this.meshMaterials) {
-      if (material.opacity >= 0.05) {
-        material.opacity = material.opacity - 0.02;
-      } else if (material.opacity  < 0.05) {
-      fadeComplete = true;
-      }
-      if (fadeComplete) {
-        
-        materialCleanUp();
-      clearInterval(this._fadeInterval);
-      }
-    } 
-  }, 75);
-  
-  const materialCleanUp = () => {
-  this.mesh.traverse(obj => {
-    if (obj.isMesh) {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(mat => mat.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    }
-  });
-  scene.remove(this.mesh);
-}
-}, 
-attack () {
-  if (this.status === "dead" || this._attackInterval) return;  
-  
-  this._attackInterval = setInterval(() => this.attackAction(), this.damage_interval * 1000);
-},
-attackSprite () {
-      const attackSprite = new THREE.Sprite( tankAttackMaterial2 );
-      attackSprite.position.copy(this.mesh.position);
-      attackSprite.position.y += 1;
-      attackSprite.scale.set(1, 1, 1);
-       if (this.targetDirection) {
-       // Get angle in radians from targetDirection vector
-      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
-      attackSprite.material.rotation = angle + Math.PI / 2;// Yaw rotation
-      }
-      scene.add( attackSprite );  
-      setTimeout(() => {
-    scene.remove(attackSprite);
-      }, 500);  
-},
-attackSound () {
-  if (soundBuffers.tronFireBuffer) {
-    const tronFireSound = new THREE.Audio(listener);
-    tronFireSound.setBuffer(soundBuffers.tronFireBuffer);
-    tronFireSound.setLoop(false);
-
-    // Calculate distance from unit to camera's target (board center)
-    const cameraTarget = controls.target;
-    const unitPos = this.mesh.position;
-    const distance = unitPos.distanceTo(cameraTarget);
-
-    // Set volume based on distance (closer to center = louder)
-    const maxDistance = 10;
-    const minVolume = 0.1;
-    const maxVolume = 0.7;
-    let volume = maxVolume - (distance / maxDistance) * (maxVolume - minVolume);
-    volume = Math.max(minVolume, Math.min(maxVolume, volume));
-
-    tronFireSound.setVolume(volume);
-    tronFireSound.play();
-
-    setTimeout(() => {
-      tronFireSound.stop();
-      if (tronFireSound.parent) tronFireSound.parent.remove(tronFireSound);
-    }, 1500);
-  }
-}
-}
-
-}
 }
 
 
@@ -1593,7 +1028,7 @@ const addUnit = function(unit, playerAlignment, x, z) {
           newUnit.mesh.children[0].rotation.set(0,3.14159265,0)
         }
       }
-      console.log(newUnit);
+      
       scene.add(newUnit.mesh);
 
 }, undefined, function ( error ) {
@@ -1693,6 +1128,7 @@ function movementAttackController () {
         
         if(unit.target) {
           if(unit.target.status === "dead" && unit._attackInterval) {
+            console.log(`clearing attack target death in MAC! ${unit.name}`);
             clearInterval(unit._attackInterval);
           }
         }
@@ -1701,6 +1137,9 @@ function movementAttackController () {
         if (unit.target != nearestEnemyAndAlly[0]) {
           unit.lastTarget = unit.target;
           unit.target = nearestEnemyAndAlly[0];
+          console.log(
+          `${unit.name} changing targets from ${unit.lastTarget ? unit.lastTarget.name : 'none'} to ${unit.target ? unit.target.name : 'none'}`
+          );
         }
         
         // if there are no units to attack, unit should not move or attack
@@ -1715,9 +1154,9 @@ function movementAttackController () {
           // ...rest of your movement/attack logic...
         
         // if the unit hasn't got a target or its current target is dead then assign nearest enemy to the unit's target property
-        if(!unit.target || unit.target.status === "dead") {        
-            const nearestEnemy = nearestEnemyAndAlly[0]   
-                unit.target = nearestEnemy;    
+        if(!unit.target || unit.target.status === "dead") { 
+            unit.lastTarget = unit.target;       
+            unit.target = nearestEnemyAndAlly[0]     
         }
 /*if (unit.name === "ratTank") {
   // log here
@@ -1765,7 +1204,7 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
 
               if (allyDistance <= unit.size + unit.target.size && distance > unit.range) {
                 allyDirection.normalize();
-                    unit.position.addScaledVector(allyDirection, unit.speed / 2);
+                    unit.position.addScaledVector(allyDirection, unit.speed / 1.5);
                     unit.mesh.position.copy(unit.position);
               }
             }
@@ -1774,7 +1213,6 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
             
             if (distance > unit.range) {
                 
-
                     enemyDirection.normalize();
                     unit.position.addScaledVector(enemyDirection, (0.02));
                     unit.mesh.position.copy(unit.position);
@@ -1789,10 +1227,12 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
              // If the target has changed, clear the interval
           if (unit.lastTarget !== nearestEnemyAndAlly[0]) {
              if (unit._attackInterval) {
+              console.log(`clearing attack interval via changedtarget in MAC! ${unit.name}`);
               clearInterval(unit._attackInterval);
               unit._attackInterval = null;
             }
           unit.lastTarget = nearestEnemyAndAlly[0];
+          
           }
 
           // If in range and facing, start attack interval if not running
@@ -1826,7 +1266,6 @@ const raycaster = new THREE.Raycaster();
     {}
     if (currentFunds >= selectedShopButton.cost) {
     addUnit(selectedShopButton.name, "player", intersections[0].object.position.x, intersections[0].object.position.z);
-    console.log(`${intersections[0].object.position.x}, ${intersections[0].object.position.z}`);
     const i = Math.round(intersections[0].object.position.z * -1);
     const j = Math.round(intersections[0].object.position.x);
     placementBoard[i][j] = selectedShopButton.name;
@@ -1990,8 +1429,13 @@ function clearHiddenUnitsPlacementBoard() {
   }
 }
 
+let roundResolved = false;
+
 function roundResolveAlert(winner, loser, healthLost, draw, drawHealthLost) {
   
+  if (roundResolved) return;
+  roundResolved = true;
+
   let resolveAlertDiv = document.getElementById('resolve-alert');
   if (!resolveAlertDiv) {
     resolveAlertDiv = document.createElement('div');
@@ -2145,6 +1589,7 @@ function updateHealthDisplays() {
 function stopAllAttacks () {
   for (let unit of activeUnits) {
     if (unit._attackInterval) {
+      console.log(`clearing attack interval via stopAllAttacks! ${this.name}`);
     clearInterval(unit._attackInterval)
     unit._attackInterval = null;
     }
