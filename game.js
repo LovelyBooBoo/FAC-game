@@ -542,11 +542,15 @@ function startBattlePhase() {
     if (battleWinCheckInterval) clearInterval(battleWinCheckInterval);
     
     battleWinCheckInterval = setInterval(() => {
+      if (roundResolved) {
+    clearInterval(battleWinCheckInterval);
+    return;
+  }
     const allPlayerUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "player" && unit.status === "alive");
     const allOpponentUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "opponent" && unit.status === "alive");
     if (allPlayerUnitsDead) {
 
-      console.log("allPlayerUnitsDead!");
+      console.log("allPlayerUnitsDead!" && battlePhaseRemaining >0);
       const remainingOpponentUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "opponent").length
       playerHealth -= remainingOpponentUnits;
       updateHealthDisplays();
@@ -558,7 +562,7 @@ function startBattlePhase() {
 
     } else if (allOpponentUnitsDead) {
 
-      console.log("allOpponentUnitsDead!");
+      console.log("allOpponentUnitsDead!" && battlePhaseRemaining >0);
       const remainingPlayerUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "player").length
       opponentHealth -= remainingPlayerUnits; 
       updateHealthDisplays();
@@ -1081,13 +1085,17 @@ const addUnit = function(unit, playerAlignment, x, z) {
 // adds an intro card on loading
 
 const introImg = document.createElement('img');
-introImg.src = 'Assets/Textures/Intro card/intro-card-01.png'; // Replace with your actual image path
+introImg.src = 'Assets/Textures/Intro card/intro-card-01.png'; 
 introImg.style.position = 'fixed';
 introImg.style.left = '50%';
 introImg.style.top = '50%';
-introImg.style.width = '1080px';
-introImg.style.height = '1080px';
-introImg.style.transform = 'translate(-50%, -50%)';
+introImg.style.width = '35vw';
+introImg.style.height = '35vw'; 
+introImg.style.maxWidth = '70vw';
+introImg.style.maxHeight = '70vh';
+introImg.style.minWidth = '300px';
+introImg.style.minHeight = '300px';
+introImg.style.transform = 'translate(-50%, -55%)';
 introImg.style.zIndex = '2000'; 
 
 document.body.appendChild(introImg);
@@ -1106,8 +1114,8 @@ const introBtn = buttonMaker(
 );
 introBtn.style.position = 'fixed';
 introBtn.style.left = '50%';
-introBtn.style.top = 'calc(50% + 570px)';
-introBtn.style.transform = 'translateX(-50%)';
+introBtn.style.bottom = '6%';
+introBtn.style.transform = 'translate(-50%, 0)';
 introBtn.style.zIndex = '2001';
 
 document.body.appendChild(introBtn);
@@ -1365,9 +1373,15 @@ function addShopButtons () {
 }
   );
 
-  btn.style.position = 'fixed';
-  btn.style.right = '30px';
-  btn.style.top = `${400 + (i * 200)}px`;
+  const buttonCount = currentShopStock.length;
+const topMargin = 100; // px from top of screen
+const bottomMargin = 100; // px from bottom of screen
+const availableHeight = window.innerHeight - topMargin - bottomMargin;
+const buttonSpacing = availableHeight / buttonCount;
+
+btn.style.position = 'fixed';
+btn.style.right = '30px';
+btn.style.top = `${topMargin + i * buttonSpacing}px`;
   btn.style.zIndex = '2001';
   btn.style.display = 'flex';
   btn.style.flexDirection = 'column'; 
@@ -1377,8 +1391,12 @@ function addShopButtons () {
   // Image centered inside button
   const img = document.createElement('img');
   img.src = `Assets/Textures/shop-buttons/${unit.name}.png`;
-  img.style.width = '160px';
-  img.style.height = '100px';
+  img.style.width = '6.25vw';
+  img.style.height = '6.94vh';
+  img.style.maxWidth = '160px';
+  img.style.maxHeight = '100px';
+  img.style.minWidth = '60px';
+  img.style.minHeight = '40px';
   img.style.pointerEvents = 'none';
 
   btn.appendChild(img);
@@ -1471,8 +1489,6 @@ function clearHiddenUnitsPlacementBoard() {
 function roundResolveAlert(winner, loser, healthLost, draw, drawHealthLost) {
   
   console.log(roundResolved);
-  console.log(playerHealth);
-  console.log(opponentHealth);
 
   if (roundResolved) return;
   roundResolved = true;
