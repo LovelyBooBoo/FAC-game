@@ -9,8 +9,8 @@ import * as THREE from './libs/three/build/three.module.js';
 import { OrbitControls } from './libs/three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from './libs/three/examples/jsm/loaders/GLTFLoader.js';
 import { MapControls } from './libs/three/examples/jsm/controls/MapControls.js';
-import { degToRad, radToDeg } from './libs/three/src/nodes/math/MathUtils.js';
-import { AnimationMixer } from './libs/three/src/animation/AnimationMixer.js';
+import { degToRad, radToDeg } from './libs/three/examples/jsm/math/MathUtils.js';
+import { AnimationMixer } from './libs/three/examples/jsm/animation/AnimationMixer.js';
 import { DragControls } from './libs/three/examples/jsm/controls/DragControls.js';
 
 
