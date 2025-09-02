@@ -280,7 +280,7 @@ document.addEventListener('mousemove', (e) => {
 let floor = null;
 const displayedGridMeshes = [];
 
-loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
+loader.load( `Assets/placeholder_models/floor.glb`, function ( gltf ) {
   floor = gltf.scene;
   floor.position.set(0,-0.1,0);
   floor.scale.set(1,1,1);
@@ -979,7 +979,7 @@ let EnemyUnitCount = 0;
 
 const addUnit = function(unit, playerAlignment, x, z) {
 
-  loader.load( `/Assets/placeholder_models/${unit}.glb`, function ( gltf ) {
+  loader.load( `Assets/placeholder_models/${unit}.glb`, function ( gltf ) {
     activeUnits.push(unitFactory(unit, playerAlignment, x, z));
     const newUnit = activeUnits[activeUnits.length - 1];
       newUnit.mesh = gltf.scene;
