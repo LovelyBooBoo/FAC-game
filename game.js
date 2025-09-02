@@ -5,7 +5,7 @@ but I'm fairly happy with the functional result. The code uses the three.js libr
 */
 
 
-import * as THREE from './libs/three';
+import * as THREE from './libs/three/build/three.module.js';
 import { OrbitControls } from './libs/three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from './libs/three/examples/jsm/loaders/GLTFLoader.js';
 import { MapControls } from './libs/three/examples/jsm/controls/MapControls.js';
