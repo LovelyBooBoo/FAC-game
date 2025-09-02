@@ -5,16 +5,14 @@ but I'm fairly happy with the functional result. The code uses the three.js libr
 */
 
 
-import * as THREE from '/three';
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { GLTFLoader } from '/three/addons/loaders/GLTFLoader.js';
-import { MapControls } from '/three/addons/controls/MapControls.js';
-import { degToRad, radToDeg } from '/three/src/math/MathUtils.js';
-import { AnimationMixer } from 'three';
-import { DragControls } from '/three/examples/jsm/controls/DragControls.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import * as THREE from './node_modules/three';
+import { OrbitControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from './node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+import { MapControls } from './node_modules/three/examples/jsm/controls/MapControls.js';
+import { degToRad, radToDeg } from './node_modules/three/src/nodes/math/MathUtils.js';
+import { AnimationMixer } from './node_modules/three/src/animation/AnimationMixer.js';
+import { DragControls } from './node_modules/three/examples/jsm/controls/DragControls.js';
+
 
 // instantiate the scene
 
