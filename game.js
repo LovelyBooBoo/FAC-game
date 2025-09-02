@@ -5,13 +5,13 @@ but I'm fairly happy with the functional result. The code uses the three.js libr
 */
 
 
-import * as THREE from './node_modules/three';
-import { OrbitControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from './node_modules/three/examples/jsm/loaders/GLTFLoader.js';
-import { MapControls } from './node_modules/three/examples/jsm/controls/MapControls.js';
-import { degToRad, radToDeg } from './node_modules/three/src/nodes/math/MathUtils.js';
-import { AnimationMixer } from './node_modules/three/src/animation/AnimationMixer.js';
-import { DragControls } from './node_modules/three/examples/jsm/controls/DragControls.js';
+import * as THREE from './libs/three';
+import { OrbitControls } from './libs/three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from './libs/three/examples/jsm/loaders/GLTFLoader.js';
+import { MapControls } from './libs/three/examples/jsm/controls/MapControls.js';
+import { degToRad, radToDeg } from './libs/three/src/nodes/math/MathUtils.js';
+import { AnimationMixer } from './libs/three/src/animation/AnimationMixer.js';
+import { DragControls } from './libs/three/examples/jsm/controls/DragControls.js';
 
 
 // instantiate the scene
