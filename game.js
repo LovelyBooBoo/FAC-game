@@ -5,13 +5,13 @@ but I'm fairly happy with the functional result. The code uses the three.js libr
 */
 
 
-import * as THREE from 'three';
+import * as THREE from '/three';
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MapControls } from 'three/addons/controls/MapControls.js';
-import { degToRad, radToDeg } from 'three/src/math/MathUtils.js';
+import { GLTFLoader } from '/three/addons/loaders/GLTFLoader.js';
+import { MapControls } from '/three/addons/controls/MapControls.js';
+import { degToRad, radToDeg } from '/three/src/math/MathUtils.js';
 import { AnimationMixer } from 'three';
-import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
+import { DragControls } from '/three/examples/jsm/controls/DragControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
