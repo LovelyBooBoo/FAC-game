@@ -1,18 +1,11 @@
 /* 
-Concept - office Wars: an autobattler using very simple office objects as the combatants
-
-Low tier units (chaff) - Mice (melee), Paperclips (melee), pushpin 
-Mid tier units - Stapler (ranged), Bulldog catapults (ranged using elastic band), 
-High tier units - water dispenser (ranged flamethrower), shredder (melee), PC (GOD TIER)
-
-
-units are availble from the "in tray"
-you can sell them in the bin
+Welcome to Rattack! I coded this over a period of a month or so and there is a lot I would still improve 
+but I'm fairly happy with the functional result. The code uses the three.js library to create a rendered
+3D game. The most important functions have comments explaining their purpose.
 */
 
 
 import * as THREE from 'three';
-//import { Loader } from 'three';
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MapControls } from 'three/addons/controls/MapControls.js';
@@ -282,18 +275,10 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 
-// load in the grid
+// load in the floor, which is effectively the toyshop background scene, as well as an array for storing the mesh grid objects for raycasting 
 
-let displayedGrid = null;
-let displayedUnit = null;
 let floor = null;
 const displayedGridMeshes = [];
-
-let battleWinCheckInterval = null;
-let startBattleButtonContainer = null;
-
-
-
 
 loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
   floor = gltf.scene;
@@ -308,13 +293,13 @@ loader.load( `/Assets/placeholder_models/floor.glb`, function ( gltf ) {
 } );
  
 
-// fps counter
+// variables for the FPS display, which should be kept in the game for debugging purposes
 
 let lastTime = performance.now();
 let frames = 0;
 let fps = 0;
 
-// Create FPS display
+// FPS display elements that appear on screen
 const fpsDisplay = document.createElement('div');
 fpsDisplay.style.position = 'fixed';
 fpsDisplay.style.top = '10px';
@@ -333,7 +318,6 @@ const pointer = new THREE.Vector2();
 function onPointerMove( event ) {
 
 	// calculate pointer position in normalized device coordinates
-	// (-1 to +1) for both components
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = - ((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -350,8 +334,13 @@ let placementRaycasterActive = false;
 
 const clock = new THREE.Clock();
 
-// set variables for player turns and higher-order game logic
-
+/* set variables for player turns and higher-order game logic such as what "phase" the game is in. In
+the placement phase units can be placed, but they don't move or attack. In the battle phase
+most ui elements disappear and the player must wait for units' battle to resolve. These variables
+store things like the duration of a battle phase, the funds in the opponent and player bank etc
+*/
+let battleWinCheckInterval = null;
+let startBattleButtonContainer = null;
 let currentGameRound = 0;
 const gamePhases = ["placement", "battle"]
 let currentPhaseIndex = 0
@@ -360,8 +349,9 @@ let battlePhaseRemaining = battlePhaseDuration;
 let opponentFunds;
 let enemyUnitsPreview = [];
 let attacksAndMovementEnabler = false;
+let roundResolved = false;
 
-// declare player and opponent health and display on screen
+// declare player and opponent health. These variables are adjusted as the game progresses and each round resolves.
 
 let playerHealth = 50;
 let opponentHealth = 50;
@@ -400,7 +390,7 @@ opponentHealthDisplay.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
 opponentHealthDisplay.textContent = `Opponent Health: ${opponentHealth}`;
 document.body.appendChild(opponentHealthDisplay);
 
-// game controller function
+// game controller function which is called and invokes the relevant function that starts the next game phase
 
 function gamePhaseController () {
   const phase = gamePhases[currentPhaseIndex];
@@ -418,34 +408,54 @@ function gamePhaseController () {
 
 }
 
+// placement phase function which invokes all other functions necessary for the placement phase to occur
+
 function startPlacementPhase () {
   
   
-  // reset the camera and lock the map controls
+  // reset the camera and lock the map controls so player is in a fixed view
   camera.position.set(30, 80, 20);
   controls.reset();
   controls.enabled = false;
   dragControls.enabled = true;
   gameMusic.setVolume(0.3);
   
+  // update the health displays of the player and opponent
+
   updateHealthDisplays();
+
+  // add invreasing funds to the opponents' wallet with every round
 
   opponentFunds = currentGameRound * 50 + 100
 
+  // remove all units from the previous round that are still on the board. This refers to their meshes and materials
+
   boardUnitCleanUp();
   
+  // instantiate the shop buttons
+
   addShopButtons();
+
+  // fire up the raycaster so the player can highlight the grid squares and place units
 
   placementRaycaster();
 
+  // calculate where enemy units can be placed this round
+
   enemyPlacementController();
 
+  // the unit initialiser adds all previously placed units back on the board, but doesn't yet add the new enemy units
+  // this round so that they are hiddun until the start battle button is pressed. hidden enemy units stored in separate array.
+
   unitInitialiser(placementBoard);
+
+  // add unit previews to the top of the screen based on what enemy units are deploying this round
 
   unitPreviewInitialiser();
 
 
-  // add a grid of meshes for raycasting on board points (and thereby placing units)
+  // add a grid of meshes for raycasting on board points (and thereby placing units). Default visibility is false,
+  // and when players cursor over them, they are visible again. Not "transparent" because this is too resource intensive.
 
   for (let i = 0; i < 40; i++) {
     if (i >= 19) {
@@ -465,32 +475,42 @@ function startPlacementPhase () {
 }
 
 
-// function that loads in the shop units so that they can then be placed on board and spawn a unit
-
-//loadShopUnits();
+// The start battle button added so the player can enter the battle phase whenever they choose
 
 addStartBattleButton();
 
-   // add a start battle button at bottom of the screen
-
-
-
 }
+
+/* The battle phase function. It invokes all the relevant functions that control battle phase such as initialising
+hidden enemy units, and enables the movement and attack controller so that units start fighting.
+There is a timeout set for the latter parts of the function due to the async loading of units creating errors, so
+it was easiest just to get the function to wait a short while before proceeding.
+*/
 
 function startBattlePhase() {
   
+  // add enemy units that are deploying this round but were hidden during placement phase
   unitInitialiser(hiddenUnitsPlacementBoard);
+
+  // clear this array so that the units are not duplicated / added every subsequent round
   clearHiddenUnitsPlacementBoard();
+
+  // get rid of the unit preview at top of screen and clear its array
   removeEnemyUnitsPreview();
   enemyUnitsPreview.length = 0;
+
   gameMusic.setVolume(0.12);
   roundResolved = false;
 
   setTimeout(() => {
- currentPhaseIndex = 1;
+ 
+    // controls switched back to more free map controls so that player can zoom and pan a bit
+
  controls.reset();
   controls.enabled = true;
   dragControls.enabled = false;
+
+  // remove the shop buttons!
   shopButtons.forEach((button) => {
     button.remove();
   }
@@ -499,16 +519,25 @@ function startBattlePhase() {
   startBattleButtonContainer = null;
   shopButtons.length = 0;
 
+  // VERY IMPORTANT - if this is not enabled, the function controlling movement and attack won't run and the phase won't start
+
   attacksAndMovementEnabler = true;
+
+  // make sure the placement grid planes for raycasting aren't visible
 
   for (const plane of displayedGridMeshes) {
     plane.visible = false;
   }
+
+  // ensure timings are set up properly and start teh clock!
+
    battlePhaseRemaining = battlePhaseDuration;
     battleTimerDisplay.style.display = 'block';
     clock.start();
 
-    // check once per second to see if all units on either side are dead
+    // This function checks once per second to see if all units on either side are dead, or if the timer has run out
+    // in each instance it invokes a round resolve alert, and amends player / opponent health appropriately
+    // if player or opponent health drops below zero it's game over!
 
     if (battleWinCheckInterval) clearInterval(battleWinCheckInterval);
     
@@ -516,30 +545,41 @@ function startBattlePhase() {
     const allPlayerUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "player" && unit.status === "alive");
     const allOpponentUnitsDead = !activeUnits.some(unit => unit.playerAlignment === "opponent" && unit.status === "alive");
     if (allPlayerUnitsDead) {
+
+      console.log("allPlayerUnitsDead!");
       const remainingOpponentUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "opponent").length
-      roundResolveAlert("Opponent", "Player", remainingOpponentUnits);
       playerHealth -= remainingOpponentUnits;
+      updateHealthDisplays();
+      roundResolveAlert("Opponent", "Player", remainingOpponentUnits);
       clock.stop();
       attacksAndMovementEnabler = false;
       stopAllAttacks();
       clearInterval(battleWinCheckInterval);
+
     } else if (allOpponentUnitsDead) {
+
+      console.log("allOpponentUnitsDead!");
       const remainingPlayerUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "player").length
-       roundResolveAlert("Player", "Opponent", remainingPlayerUnits);
-       opponentHealth -= remainingPlayerUnits;
+      opponentHealth -= remainingPlayerUnits; 
+      updateHealthDisplays();
+      roundResolveAlert("Player", "Opponent", remainingPlayerUnits);
        clock.stop();
        attacksAndMovementEnabler = false;
        stopAllAttacks();
       clearInterval(battleWinCheckInterval);
+
        } else if (!allOpponentUnitsDead && !allPlayerUnitsDead && battlePhaseRemaining <=0) {
+
+        console.log("Draw!");
         const draw = true;
         const remainingPlayerUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "player").length
         const remainingOpponentUnits = activeUnits.filter((unit) => unit.status === "alive" && unit.playerAlignment === "opponent").length
+        opponentHealth -= remainingPlayerUnits;
+        playerHealth -= remainingOpponentUnits;
+        updateHealthDisplays();
         roundResolveAlert("Player", "Opponent", remainingOpponentUnits, draw, remainingPlayerUnits);
         clock.stop();
         attacksAndMovementEnabler = false;
-        opponentHealth -= remainingPlayerUnits;
-        playerHealth -= remainingOpponentUnits;
         stopAllAttacks();
         clearInterval(battleWinCheckInterval);
       }
@@ -549,7 +589,7 @@ function startBattlePhase() {
 }
 
 
-// set animation loop
+// The animation loop which performs a bunch of vital functions every frame like updating renderer, camera, and raycasting
 
 function animate() {
   
@@ -616,9 +656,6 @@ if (currentPhaseIndex === 1) {
   battleTimerDisplay.style.display = 'none';
 }
 
-
-  //composer.render();
-
   renderer.render(scene, camera);
   controls.update();
 
@@ -627,13 +664,12 @@ if (currentPhaseIndex === 1) {
 renderer.setAnimationLoop( animate );
 
 
-
-
 // create an array that stores all unit objects currently active in the round
 
 let activeUnits = [];
 
-// function that creates units based on specfications
+// The unitInfo object allows easy customisation of unit properties and then gets fed into the unitfactory function which
+// creates unit objects
 
 const unitInfo = {
   ratChaff: {
@@ -657,6 +693,11 @@ const unitInfo = {
     attackSoundBuffer: "tronFireBuffer", spriteScale: 0.7, minVolume: 0.1, maxVolume: 0.7, damageTimeOut: 1800
   }
 };
+
+/* The unit factore function creates objects that contain all important unit properties, the unit mesh object as imported
+by the GLFG loader (.mesh) and the various methods like attacking, dying, and animating. Some properties from three.js
+objects are referenced by top-level properties for ease of access. 
+*/
 
 const unitFactory = function (unitName, playerAlignment, x, z) {
  const importedUnitInfo = unitInfo[unitName];
@@ -895,7 +936,8 @@ attackSound () {
 }
 
 
-// instantiate a 2D matrix which forms the basis for the placement board
+// instantiate a 2D matrix which forms the basis for the placement board where allied and enemy unit placements are stored. The hidden board
+// is there to store enemy units in the round they are deployed but before they should be displayed.
 
 const boardWidth = 60;
 const boardDepth = 40;
@@ -926,7 +968,10 @@ let EnemyUnitCount = 0;
 
 
 
-// function that adds units to the array storing units for this round
+// function that adds units to the array storing units for this round by importing their gltf files. While adding, it also
+// traverses unit objects to replace their materials with toon shaders and places those materials in array in the unit object
+// as well as creating a shadow plane and attaching it to the mesh, putting the object animations in an array, and ensuring
+// that unit objects are orientated in the right direction by rotating child empties so that allied units aren't backwards
 
 const addUnit = function(unit, playerAlignment, x, z) {
 
@@ -949,16 +994,10 @@ const addUnit = function(unit, playerAlignment, x, z) {
       });
      child.material = toonMaterial;
       } 
-
-    /*newUnit.mesh.traverse(child => {
-        if (child.isMaterial && child.name === "Main" && playerAlignment === "player") {
-          child.color = new THREE.Color().setHex( 0x5951E7FF );
-        }
-      })
-*/    
-      
       
       });
+
+
 
       const shadow = createShadow(newUnit);
       newUnit.mesh.add(shadow);
@@ -1039,7 +1078,7 @@ const addUnit = function(unit, playerAlignment, x, z) {
 }
 
 
-// add the intro card on loading
+// adds an intro card on loading
 
 const introImg = document.createElement('img');
 introImg.src = 'Assets/Textures/Intro card/intro-card-01.png'; // Replace with your actual image path
@@ -1052,8 +1091,6 @@ introImg.style.transform = 'translate(-50%, -50%)';
 introImg.style.zIndex = '2000'; 
 
 document.body.appendChild(introImg);
-
-
 
 const introBtn = buttonMaker(
   '300px', 
@@ -1075,12 +1112,9 @@ introBtn.style.zIndex = '2001';
 
 document.body.appendChild(introBtn);
 
-
-
-
-
-
-
+/* The FNEAA function iterates over every unit in the activeUnits array and finds their nearest enemy and allied units allowing
+units to always have a target set (enemies) and avoid stacking on allies.
+*/
 
 function findNearestEnemyAndAlly(unit, unitsArray) {
   let nearestEnemy = null;
@@ -1117,18 +1151,25 @@ function findNearestEnemyAndAlly(unit, unitsArray) {
   return [nearestEnemy, nearestAlly];
 }
 
+/* movementAttackController does the Lion's share of the heavy lifting with unit behaviour, decding when a unit should move,
+how far, whether it should attack etc
+*/
 
 function movementAttackController () {
     for (let unit of activeUnits) {
 
-      // if the unit isn't dead, proceed to move / attack
-      if (unit.status === "alive") {
+        // if the unit isn't dead, proceed to move / attack
+        if (unit.status === "alive") {
         
-        // retrieve nearest enemy and ally assign nearest enemy to unit's property
-        
+        /* move and attack logic is a series of (mostly binary) decisions made in order:
+        - if the unit has a target but the unit's target is dead and its attack is still running - stop attacking
+        - if the unit's target isn't the same as the most recently calculated enemy, target the new enemy
+        etc etc
+        */
+
         if(unit.target) {
           if(unit.target.status === "dead" && unit._attackInterval) {
-            console.log(`clearing attack target death in MAC! ${unit.name}`);
+            
             clearInterval(unit._attackInterval);
           }
         }
@@ -1137,9 +1178,6 @@ function movementAttackController () {
         if (unit.target != nearestEnemyAndAlly[0]) {
           unit.lastTarget = unit.target;
           unit.target = nearestEnemyAndAlly[0];
-          console.log(
-          `${unit.name} changing targets from ${unit.lastTarget ? unit.lastTarget.name : 'none'} to ${unit.target ? unit.target.name : 'none'}`
-          );
         }
         
         // if there are no units to attack, unit should not move or attack
@@ -1151,51 +1189,45 @@ function movementAttackController () {
             const enemyDirection = new THREE.Vector3().subVectors(unit.target.position, unit.position);
             unit.targetDirection = enemyDirection;
             const distance = enemyDirection.length();
-          // ...rest of your movement/attack logic...
+          
         
         // if the unit hasn't got a target or its current target is dead then assign nearest enemy to the unit's target property
         if(!unit.target || unit.target.status === "dead") { 
             unit.lastTarget = unit.target;       
             unit.target = nearestEnemyAndAlly[0]     
         }
-/*if (unit.name === "ratTank") {
-  // log here
 
-        console.log(
-  `[${unit.name}] status: ${unit.status}, ` +
-  `target: ${unit.target ? unit.target.name : 'none'} (${unit.target ? unit.target.status : 'n/a'}), ` +
-  `distance: ${distance.toFixed(2)}, ` +
-  `attackInterval: ${!!unit._attackInterval}`
-);
-}
-*/
-// Calculate desired angle to target (radians)
-const angle = Math.atan2(enemyDirection.x, enemyDirection.z) + (unit.playerAlignment === "player" ? Math.PI : 0);
+        // Calculate desired angle to target (radians)
+        const angle = Math.atan2(enemyDirection.x, enemyDirection.z) + (unit.playerAlignment === "player" ? Math.PI : 0);
 
-// Get current facing angle (radians), wrapped to [-PI, PI]
-let currentAngle = ((unit.mesh.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI;
+        // Get current facing angle (radians), wrapped to [-PI, PI]
+        let currentAngle = ((unit.mesh.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI;
 
-// Calculate shortest signed angle difference (-PI to PI)
-let angleDifference = ((angle - currentAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
+        // Calculate shortest signed angle difference (-PI to PI)
+        let angleDifference = ((angle - currentAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
 
-// If not facing target, turn toward it
-if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree threshold for snapping
-    // Turn by up to 1 degree per frame (converted to radians)
-    let turnStep = Math.sign(angleDifference) * Math.min(Math.abs(angleDifference), THREE.MathUtils.degToRad(unit.turningSpeed));
-    unit.mesh.rotation.y += turnStep;
-    // Wrap rotation after update
-    unit.mesh.rotation.y = ((unit.mesh.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI;
-} else {
-    // Snap to target angle, wrapped
-    unit.mesh.rotation.y = ((angle + Math.PI) % (2 * Math.PI)) - Math.PI;
-}
+        // If not facing target, turn toward it
+        if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { 
+
+        // Turn by up to 1 degree per frame (converted to radians)
+        let turnStep = Math.sign(angleDifference) * Math.min(Math.abs(angleDifference), THREE.MathUtils.degToRad(unit.turningSpeed));
+        unit.mesh.rotation.y += turnStep;
+
+        // Wrap rotation after update
+        unit.mesh.rotation.y = ((unit.mesh.rotation.y + Math.PI) % (2 * Math.PI)) - Math.PI;
+        } else {
+        // Snap to target angle, wrapped
+        unit.mesh.rotation.y = ((angle + Math.PI) % (2 * Math.PI)) - Math.PI;
+        }
 
 
           
               // if the unit is too near to another unit, move further away to prevent stacking and bunching
               
               const nearestAlly = nearestEnemyAndAlly[1];
+
               // check that nearestAlly isn't null, for instance if there is only one unit left
+
               if (nearestAlly){
               const allyDirection = new THREE.Vector3().subVectors(unit.position, nearestAlly.position);
               const allyDistance = allyDirection.length();
@@ -1224,10 +1256,10 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
             }   
             
             
-             // If the target has changed, clear the interval
+             // If the target has changed, clear the interval (stop attacking)
           if (unit.lastTarget !== nearestEnemyAndAlly[0]) {
              if (unit._attackInterval) {
-              console.log(`clearing attack interval via changedtarget in MAC! ${unit.name}`);
+              
               clearInterval(unit._attackInterval);
               unit._attackInterval = null;
             }
@@ -1239,14 +1271,17 @@ if (Math.abs(angleDifference) > THREE.MathUtils.degToRad(1)) { // 1 degree thres
           if (distance <= unit.range && Math.abs(angleDifference) < THREE.MathUtils.degToRad(unit.fieldOfView)) {
               if (!unit._attackInterval) {
               unit.attack();
-              /*(`Calling attack() for ${unit.name} (${unit.playerAlignment}) on target ${unit.target?.name} (${unit.target?.playerAlignment})`);
-              */}
+              }
           }
           const found = activeUnits.find((element) => element.name === "ratTank");
-          //console.log(found);
+          
         }
     }
 }
+
+// raycaster and mousedown event used for clicking interactions where the player is placing units. Essentially the 
+// 2D array indeces of placementgrid array storing unit placement match the x and z coordinates of each plane in the grid exactly
+// making it easy to use the x and z coordinates to add units to the array and invoke addUnit
 
 const raycaster = new THREE.Raycaster();
 
@@ -1293,6 +1328,8 @@ if (placementRaycasterActive) return;
  
  
 }
+
+// simple button making function to prevent repeated code
 
 function buttonMaker (width, height, text, onClick, options = {}) {
   const btn = document.createElement('button');
@@ -1429,10 +1466,14 @@ function clearHiddenUnitsPlacementBoard() {
   }
 }
 
-let roundResolved = false;
+
 
 function roundResolveAlert(winner, loser, healthLost, draw, drawHealthLost) {
   
+  console.log(roundResolved);
+  console.log(playerHealth);
+  console.log(opponentHealth);
+
   if (roundResolved) return;
   roundResolved = true;
 
@@ -1628,7 +1669,12 @@ const btn = document.createElement('button');
   btn.style.transition = 'background 0.2s';
   btn.onmouseenter = () => btn.style.background = '#1756a9';
   btn.onmouseleave = () => btn.style.background = '#2d7be0';
-  btn.addEventListener("click", startBattlePhase);
+  btn.addEventListener(
+    "click", () => {
+    currentPhaseIndex = 1;
+    gamePhaseController();
+}
+);
 
   startBattleButtonContainer.appendChild(btn);
   document.body.appendChild(startBattleButtonContainer);
